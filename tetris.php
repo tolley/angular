@@ -119,13 +119,13 @@ app.factory( 'tetrisGame', function()
 
 			// A list of pivot points for each of the above tetromino block groups
 			this.pivotPoints = Array(
-				[0,	  2.5], // i shaped block
+				[0,	  1],   // i shaped block
 				[1,   1],   // j shaped block
 				[0,   1],   // l shaped block 
 				[0.5, 0.5], // o shaped block
-				[1,   0.5], // z shaped block 
+				[1,   1],   // z shaped block 
 				[1,   1],	// t shaped block 
-				[1,   0.5]  // s shaped block 
+				[1,   1]    // s shaped block 
 			);
 
 			// A list of all possible tetromino colors
@@ -167,8 +167,6 @@ app.factory( 'tetrisGame', function()
 		{
 			// Choose a random tetromino
 			var rand = this.rand( 0, this.possibleTetrominoes.length );
-			// Test each block's rotation
-			rand = 1;
 
 			var tetromino = {
 				blocks: this.possibleTetrominoes[ rand ],
@@ -181,7 +179,7 @@ app.factory( 'tetrisGame', function()
 					var clone = {};
 					clone.color = this.color;
 
-					// Deep copy the pivot point coordinates (cause JS copes arrays by reference)
+					// Deep copy the pivot point coordinates (cause JS copies arrays by reference)
 					clone.pivot = Array( 2 );
 					clone.pivot[0] = this.pivot[0];
 					clone.pivot[1] = this.pivot[1];
@@ -593,6 +591,10 @@ app.factory( 'tetrisGame', function()
 		// Sends the current tetromino to it's lowest possible point and locks it
 		dropCurrentTetromino: function()
 		{
+			// If the game hasn't been initialized, or is paused, return
+			if( ! this.initialized || this.paused )
+				return;
+
 			// While the clone is in a valid position, move it down one row
 			do
 			{
