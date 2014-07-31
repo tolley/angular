@@ -77,7 +77,7 @@ app.factory( 'tetrisGame', function()
 			this.blockHeight = this.height / 20;
 
 			// The speed for steps between block falls
-			this.step = 300;// 1000;
+			this.step = 1000;
 
 			// The counter that tells us when to move onto the next tetromino
 			this.tetrominoLockCounter = 0;
@@ -117,6 +117,17 @@ app.factory( 'tetrisGame', function()
 				Array( [0,1], [1,0], [1,1], [2,0] )  // s shaped block
 			);
 
+			// A list of pivot points for each of the above tetromino block groups
+			this.pivotPoints = Array(
+				[0,	  2.5], // i shaped block
+				[1,   1],   // j shaped block
+				[0,   1],   // l shaped block 
+				[0.5, 0.5], // o shaped block
+				[1,   0.5], // z shaped block 
+				[1,   1],	// t shaped block 
+				[1,   0.5]  // s shaped block 
+			);
+
 			// A list of all possible tetromino colors
 			this.tetrominoColors = Array(
 				'#FF0000',
@@ -147,33 +158,6 @@ app.factory( 'tetrisGame', function()
 			// Set the initialized flag
 			this.initialized = true;
 
-/*			// Draw a random block
-			var blockCoords = this.possibleTetrominoes[5];
-			this.context.fillStyle = '#FF0000';
-			this.context.strokeStyle = '#FF0000';
-
-			for( var n = 0; n < blockCoords.length; ++n )
-			{
-				var xCoord = blockCoords[n][0];
-				var yCoord = blockCoords[n][1];
-
-				// Try rotating the block
-//				x' = x * cos(PI/2) - y * sin(PI/2) and y' = x * sin(PI/2) + y * cos(PI/2)
-				var xCoordOrig = xCoord;
-				var yCoordOrig = yCoord;
-				xCoord = Math.round( xCoordOrig * Math.cos( 3.1415 / 2 ) - yCoordOrig * Math.sin( 3.1415 / 2 ) );
-				yCoord = Math.round( xCoordOrig * Math.sin( 3.1415 / 2 ) + yCoordOrig * Math.cos( 3.1415 / 2 ) );
-
-				console.log( xCoord + '/' + yCoord );
-
-				this.context.fillRect(
-					xCoord * this.blockWidth,
-					yCoord * this.blockHeight,
-					this.blockWidth - 1,
-					this.blockHeight - 1 );
-			}
-*/
-
 			// Set a timeout interval to update the game state
 			this.interval = setInterval( function(){ self.update.apply( self ); }, 107 );
 		},
@@ -181,9 +165,14 @@ app.factory( 'tetrisGame', function()
 		// Returns a randomly generated tetrominoe
 		generateTetromino: function()
 		{
+			// Choose a random tetromino
+			var rand = this.rand( 0, this.possibleTetrominoes.length );
+			// Test each block's rotation
+			rand = 1;
+
 			var tetromino = {
-//				blocks: this.possibleTetrominoes[ this.rand( 0, this.possibleTetrominoes.length ) ],
-				blocks: this.possibleTetrominoes[1],
+				blocks: this.possibleTetrominoes[ rand ],
+				pivot: this.pivotPoints[ rand ],
 				color: this.tetrominoColors[ this.rand( 0, this.tetrominoColors.length ) ],
 
 				// Returns a copy of this tetromino
@@ -191,6 +180,11 @@ app.factory( 'tetrisGame', function()
 				{
 					var clone = {};
 					clone.color = this.color;
+
+					// Deep copy the pivot point coordinates (cause JS copes arrays by reference)
+					clone.pivot = Array( 2 );
+					clone.pivot[0] = this.pivot[0];
+					clone.pivot[1] = this.pivot[1];
 
 					// Deep copy the tetromino coordinates (cause JS copies arrays by reference)
 					clone.blocks = Array( 4 );
@@ -248,6 +242,9 @@ app.factory( 'tetrisGame', function()
 					{
 						clone.blocks[n][1] += 1;
 					}
+
+					// Move the pivot down one block
+					clone.pivot[1] += 1;
 
 					if( this.isValidTetrominoPosition( clone ) )
 						this.currentTetromino = clone;
@@ -326,7 +323,6 @@ app.factory( 'tetrisGame', function()
 			{
 				var x = this.currentTetromino.blocks[n][0];
 				var y = this.currentTetromino.blocks[n][1];
-				console.log( x, y );
 				this.board[x][y] = this.currentTetromino.color;
 			}
 
@@ -432,9 +428,96 @@ app.factory( 'tetrisGame', function()
 			return returnValue;
 		},
 
+		// Called when the user wants to rotate the current tetromino clockwise
+		onTetrominoClockwise: function()
+		{
+			// If the game hasn't been initialized, or is paused, return
+			if( ! this.initialized || this.paused )
+				return;
+
+			// Clone the current tetromino
+			var clone = this.currentTetromino.clone();
+
+			// Rotate the clone
+			for( var n = 0; n < clone.blocks.length; ++n )
+			{
+				// Move the current block back to the origin (0,0) using the pivot point
+				clone.blocks[n][0] -= clone.pivot[0];
+				clone.blocks[n][1] -= clone.pivot[1];
+
+				// Rotate the current block
+				var tempX = clone.blocks[n][0];
+				clone.blocks[n][0] = -1 * clone.blocks[n][1];
+				clone.blocks[n][1] = tempX;
+
+				// Move the current block back into it's position using the pivot point
+				clone.blocks[n][0] = Math.round( clone.blocks[n][0] + clone.pivot[0] );
+				clone.blocks[n][1] = Math.round( clone.blocks[n][1] + clone.pivot[1] );
+			}
+
+			// See if the tetromino has space on the board
+			var validRotation = this.validateTetrominoRotation( clone );
+
+			if( validRotation )
+				this.currentTetromino = clone;
+
+			// Update and render the playing field
+			this.update();
+			this.render();
+		},
+
+		// Called when the user wants to rotate the current tetromino counter clockwise
+		onTetrominoCounterClockwise: function()
+		{
+			// If the game hasn't been initialized, or is paused, return
+			if( ! this.initialized || this.paused )
+				return;
+
+			// Clone the current tetromino
+			var clone = this.currentTetromino.clone();
+
+			// Rotate the clone
+			for( var n = 0; n < clone.blocks.length; ++n )
+			{
+				// Move the current block back to the origin (0,0) using the pivot point
+				clone.blocks[n][0] -= clone.pivot[0];
+				clone.blocks[n][1] -= clone.pivot[1];
+
+				// Rotate the current block
+				var tempX = clone.blocks[n][0];
+				clone.blocks[n][0] = clone.blocks[n][1];
+				clone.blocks[n][1] = -1 * tempX;
+
+				// Move the current block back into it's position using the pivot point
+				clone.blocks[n][0] = Math.round( clone.blocks[n][0] + clone.pivot[0] );
+				clone.blocks[n][1] = Math.round( clone.blocks[n][1] + clone.pivot[1] );
+			}
+
+			// See if the tetromino has space on the board
+			var validRotation = this.validateTetrominoRotation( clone );
+
+			if( validRotation )
+				this.currentTetromino = clone;
+
+			// Update and render the playing field
+			this.update();
+			this.render();
+		},
+
+		// Returns true if clone is in a valid position on the board, or can be moved into a valid position
+		// If it needs to be moved, it will be moved automatically (cause JS passes things by reference)
+		validateTetrominoRotation: function( clone )
+		{
+			return true;
+		},
+
 		// Called when the user wants to move the current tetromino right
 		onTetrominoRight: function()
 		{
+			// If the game hasn't been initialized, or is paused, return
+			if( ! this.initialized || this.paused )
+				return;
+
 			// Clone the current tetromino
 			var clone = this.currentTetromino.clone();
 
@@ -443,6 +526,9 @@ app.factory( 'tetrisGame', function()
 			{
 				clone.blocks[n][0] += 1;
 			}
+
+			// Move the pivot point
+			clone.pivot[0] += 1;
 
 			// Verify that the current tetromino is in a valid position
 			if( this.isValidTetrominoPosition( clone ) )
@@ -468,6 +554,10 @@ app.factory( 'tetrisGame', function()
 		// Called when the user wants to move the current tetromino right
 		onTetrominoLeft: function()
 		{
+			// If the game hasn't been initialized, or is paused, return
+			if( ! this.initialized || this.paused )
+				return;
+
 			// Clone the current tetromino
 			var clone = this.currentTetromino.clone();
 
@@ -476,6 +566,9 @@ app.factory( 'tetrisGame', function()
 			{
 				clone.blocks[n][0] -= 1;
 			}
+
+			// Move the pivot left
+			clone.pivot[0] -= 1;
 
 			// Verify that the current tetromino is in a valid position
 			if( this.isValidTetrominoPosition( clone ) )
@@ -497,12 +590,43 @@ app.factory( 'tetrisGame', function()
 			this.render();
 		},
 
+		// Sends the current tetromino to it's lowest possible point and locks it
+		dropCurrentTetromino: function()
+		{
+			// While the clone is in a valid position, move it down one row
+			do
+			{
+				// Clone the current tetromino
+				var clone = this.currentTetromino.clone();
+
+				// Foreach block in the tetromino, move it down by one
+				for( var n = 0; n < clone.blocks.length; ++n )
+				{
+					clone.blocks[n][1] += 1;
+				}
+
+				// Move the pivot down one row
+				clone.pivot[1] += 1;
+
+				// If we have a valid tetromino position, make the clone the current tetromino
+				if( this.isValidTetrominoPosition( clone ) )
+					this.currentTetromino = clone;
+			}
+			while( ! this.hasCurrentTetrominoLanded() );
+
+			this.lockCurrentTetromino();
+			this.currentTetromino = this.generateTetromino();
+		},
+
 		debug: function()
 		{
-			for( var n = 0; n < this.board.length; ++n )
+			console.log( this.currentTetromino );
+
+/*			for( var n = 0; n < this.board.length; ++n )
 			{
 				console.log( this.board[n], this.board[n].length );
 			}
+*/
 		},
 
 		// Pauses the game
@@ -537,6 +661,11 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 		// Switch based on the keycode in the event
 		switch( $event.keyCode )
 		{
+			// The down array (drop the current tetromino as far as it can go)
+			case 40:
+				tetrisGame.dropCurrentTetromino();
+				break;
+
 			// The left arrow
 			case 37:
 				tetrisGame.onTetrominoLeft();
@@ -567,10 +696,12 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 
 					// The D key (rotate counter clockwise)
 					case 100:
+						tetrisGame.onTetrominoCounterClockwise();
 						break;
 
 					// The F key (rotate clockwise)
 					case 102:
+						tetrisGame.onTetrominoClockwise();
 						break;
 				}
 				break;
