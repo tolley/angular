@@ -467,6 +467,7 @@ app.factory( 'tetrisGame', function()
 			{
 				// Otherwise, make sure the current tetromino is unlocked
 				this.tetrominoLockCountdownRunning = false;
+				this.tetrominoLockCounter = 0;
 			}
 
 			// Update and render the playing field
@@ -515,6 +516,7 @@ app.factory( 'tetrisGame', function()
 			{
 				// Otherwise, make sure the current tetromino is unlocked
 				this.tetrominoLockCountdownRunning = false;
+				this.tetrominoLockCounter = 0;
 			}
 
 			// Update and render the playing field
@@ -532,31 +534,51 @@ app.factory( 'tetrisGame', function()
 			// If the rotated clone isn't in a valid position on the board
 			if( ! this.isValidTetrominoPosition( clone ) )
 			{
-				// Move the tetromino one column to the left and check to see if it's valid
-				for( var n = 0; n < clone.blocks.length; ++n )
-					clone.blocks[n][0] -= 1;
+				// A list of all the translations we need to try to find 
+				// a valid position for the rotated tetromino
+				var validTranslations = Array(
+					[-1, 0],
+					[1, 0]
+				);
 
-				clone.pivot[0] -= 1;
-
-				// If the translated clone isn't in a valid position
-				if( ! this.isValidTetrominoPosition( clone ) )
+				// Try translating the clone by each of the valid translations until we find one 
+				// that results in a valid position
+				for( var n = 0; ( n < validTranslations.length ) && ( ! returnValue ); ++n )
 				{
-					// Move the tetromino one column to the right (2 columns total) and 
-					// check to see if it's valid
-					for( var n = 0; n < clone.blocks.length; ++n )
-						clone.blocks[n][0] += 2;
+					// Translate the clone
+					for( var m = 0; m < clone.blocks.length; ++m )
+					{
+						clone.blocks[m][0] += validTranslations[n][0];
+						clone.blocks[m][1] += validTranslations[n][1];
+					}
 
-					clone.pivot[0] += 2;
+					clone.pivot[0] += validTranslations[n][0];
+					clone.pivot[1] += validTranslations[n][1];
 
-					// If the translated clone is in a valid position
+					// If the translation results in a valid board position
 					if( this.isValidTetrominoPosition( clone ) )
+					{
 						returnValue = clone;
+					}
+					else
+					{
+						// Otherwise, move the clone back to it's original position
+						for( var m = 0; m < clone.blocks.length; ++m )
+						{
+							clone.blocks[m][0] -= validTranslations[n][0];
+							clone.blocks[m][1] -= validTranslations[n][1];
+						}
+
+						clone.pivot[0] -= validTranslations[n][0];
+						clone.pivot[1] -= validTranslations[n][1];
+					}
 				}
-				else
-					returnValue = clone;
 			}
 			else
+			{
+				// Otherwise, we can return the clone
 				returnValue = clone;
+			}
 
 			return returnValue;
 		},
