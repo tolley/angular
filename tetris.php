@@ -83,7 +83,7 @@ app.factory( 'tetrisGame', function()
 			this.tetrominoLockCounter = 0;
 
 			// The maximum time to wait to lock the current tetromino
-			this.tetrominoLockTimeout = this.step;
+			this.tetrominoLockTimeout = 1000; // this.step;
 
 			// A flag to indicate the lock countdown is running
 			this.tetrominoLockCountdownRunning = false;
@@ -92,7 +92,7 @@ app.factory( 'tetrisGame', function()
 			this.currentTime = timer.getCurrentTime(),
 			this.elapsedTime = 0;
 
-			// The actual board (Note: it's sideways to x will be the horizontal coord and y will be the vertical coord)
+			// The actual board (Note: it's sideways so x will be the horizontal coord and y will be the vertical coord)
 			this.board = Array(
 				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
 				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
@@ -218,7 +218,7 @@ app.factory( 'tetrisGame', function()
 			{
 				// If the lock countdown is running
 				// Increment the lock countdown and see if the lock countdown has expired
-				this.tetrominoLockCounter += this.elapsedTime;
+				this.tetrominoLockCounter += ( time - this.currentTime );
 
 				if( this.tetrominoLockCounter >= this.tetrominoLockTimeout )
 				{
@@ -366,7 +366,7 @@ app.factory( 'tetrisGame', function()
 					lowestCoord = y;
 
 				// If the block is occupying a position that already has a block on it
-				if( x >= 0 && x < this.board.length - 1 && y >= 0 && y < this.board[x].length - 1 && typeof this.board[x][y] === 'string' )
+				if( x >= 0 && x < this.board.length && y >= 0 && y < this.board[x].length && typeof this.board[x][y] === 'string' )
 				{
 					returnValue = false;
 				}
@@ -416,7 +416,7 @@ app.factory( 'tetrisGame', function()
 					var x = this.currentTetromino.blocks[n][0];
 					var y = this.currentTetromino.blocks[n][1];
 
-					if( x < this.board.length - 1 && ( y < this.board[x].length - 1 ) && typeof this.board[x][y + 1] === 'string' )
+					if( x < this.board.length && y < this.board[x].length && typeof this.board[x][y + 1] === 'string' )
 					{
 						returnValue = true;
 					}
@@ -455,9 +455,19 @@ app.factory( 'tetrisGame', function()
 
 			// See if the tetromino has space on the board
 			var validRotation = this.validateTetrominoRotation( clone );
+			if( validRotation !== false )
+				this.currentTetromino = validRotation;
 
-			if( validRotation )
-				this.currentTetromino = clone;
+			// If we need to start the lock countdown, do so
+			if( this.hasCurrentTetrominoLanded() )
+			{
+				this.tetrominoLockCountdownRunning = true;
+			}
+			else
+			{
+				// Otherwise, make sure the current tetromino is unlocked
+				this.tetrominoLockCountdownRunning = false;
+			}
 
 			// Update and render the playing field
 			this.update();
@@ -493,9 +503,19 @@ app.factory( 'tetrisGame', function()
 
 			// See if the tetromino has space on the board
 			var validRotation = this.validateTetrominoRotation( clone );
+			if( validRotation !== false )
+				this.currentTetromino = validRotation;
 
-			if( validRotation )
-				this.currentTetromino = clone;
+			// If we need to start the lock countdown, do so
+			if( this.hasCurrentTetrominoLanded() )
+			{
+				this.tetrominoLockCountdownRunning = true;
+			}
+			else
+			{
+				// Otherwise, make sure the current tetromino is unlocked
+				this.tetrominoLockCountdownRunning = false;
+			}
 
 			// Update and render the playing field
 			this.update();
@@ -506,7 +526,39 @@ app.factory( 'tetrisGame', function()
 		// If it needs to be moved, it will be moved automatically (cause JS passes things by reference)
 		validateTetrominoRotation: function( clone )
 		{
-			return true;
+			// The return value
+			var returnValue = false;
+
+			// If the rotated clone isn't in a valid position on the board
+			if( ! this.isValidTetrominoPosition( clone ) )
+			{
+				// Move the tetromino one column to the left and check to see if it's valid
+				for( var n = 0; n < clone.blocks.length; ++n )
+					clone.blocks[n][0] -= 1;
+
+				clone.pivot[0] -= 1;
+
+				// If the translated clone isn't in a valid position
+				if( ! this.isValidTetrominoPosition( clone ) )
+				{
+					// Move the tetromino one column to the right (2 columns total) and 
+					// check to see if it's valid
+					for( var n = 0; n < clone.blocks.length; ++n )
+						clone.blocks[n][0] += 2;
+
+					clone.pivot[0] += 2;
+
+					// If the translated clone is in a valid position
+					if( this.isValidTetrominoPosition( clone ) )
+						returnValue = clone;
+				}
+				else
+					returnValue = clone;
+			}
+			else
+				returnValue = clone;
+
+			return returnValue;
 		},
 
 		// Called when the user wants to move the current tetromino right
@@ -540,6 +592,11 @@ app.factory( 'tetrisGame', function()
 				if( this.hasCurrentTetrominoLanded() )
 				{
 					this.tetrominoLockCountdownRunning = true;
+				}
+				else
+				{
+					// Otherwise, unlock the current tetromino
+					this.tetrominoLockCountdownRunning = false;
 				}
 
 			}
@@ -580,6 +637,11 @@ app.factory( 'tetrisGame', function()
 				if( this.hasCurrentTetrominoLanded() )
 				{
 					this.tetrominoLockCountdownRunning = true;
+				}
+				else
+				{
+					// Otherwise, unlock the current tetromino
+					this.tetrominoLockCountdownRunning = false;
 				}
 			}
 
