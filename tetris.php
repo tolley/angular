@@ -77,7 +77,7 @@ app.factory( 'tetrisGame', function()
 			this.blockHeight = this.height / 20;
 
 			// The speed for steps between block falls
-			this.step = 1000;
+			this.step = 700;
 
 			// The counter that tells us when to move onto the next tetromino
 			this.tetrominoLockCounter = 0;
@@ -91,6 +91,9 @@ app.factory( 'tetrisGame', function()
 			// The game's timer
 			this.currentTime = timer.getCurrentTime(),
 			this.elapsedTime = 0;
+
+			// A variable that will keep track of the total number of lines the player has made
+			this.total_num_lines = 0;
 
 			// The actual board (Note: it's sideways so x will be the horizontal coord and y will be the vertical coord)
 			this.board = Array(
@@ -138,8 +141,11 @@ app.factory( 'tetrisGame', function()
 			// The current tetromino that is falling
 			this.currentTetromino = this.generateTetromino();
 
-			// The next tetromino this will fall
+			// The next tetromino that will fall
 			this.nextTetromino = this.generateTetromino();
+
+			// An array of effects that augment the board
+			this.effects = Array();
 
 			// The board's background color
 			this.bgcolor = '#000000';
@@ -214,45 +220,56 @@ app.factory( 'tetrisGame', function()
 			var time = timer.getCurrentTime();
 			this.elapsedTime += ( time - this.currentTime );
 
-			if( this.tetrominoLockCountdownRunning )
+			// If we have any effects, update them
+			if( this.effects.length > 0 )
 			{
-				// If the lock countdown is running
-				// Increment the lock countdown and see if the lock countdown has expired
-				this.tetrominoLockCounter += ( time - this.currentTime );
-
-				if( this.tetrominoLockCounter >= this.tetrominoLockTimeout )
+				for( var n = 0; n < this.effects.length; ++n )
 				{
-					this.lockCurrentTetromino();
+					this.effects[n].update( time - this.currentTime );
 				}
 			}
-			else if( this.elapsedTime >= this.step )
+			else
 			{
-				// If the elapsed time is greater than the current step value
-				// Reset the elapsedtime
-				this.elapsedTime = 0;
-
-				// If the lock countdown isn't running for the current tetromino
-				if( ! this.tetrominoLockCountdownRunning )
+				if( this.tetrominoLockCountdownRunning )
 				{
-					// Make sure we can move the current tetromino down
-					var clone = this.currentTetromino.clone();
-					for( var n = 0; n < clone.blocks.length; ++n )
+					// If the lock countdown is running
+					// Increment the lock countdown and see if the lock countdown has expired
+					this.tetrominoLockCounter += ( time - this.currentTime );
+
+					if( this.tetrominoLockCounter >= this.tetrominoLockTimeout )
 					{
-						clone.blocks[n][1] += 1;
+						this.lockCurrentTetromino();
 					}
+				}
+				else if( this.elapsedTime >= this.step )
+				{
+					// If the elapsed time is greater than the current step value
+					// Reset the elapsedtime
+					this.elapsedTime = 0;
 
-					// Move the pivot down one block
-					clone.pivot[1] += 1;
-
-					if( this.isValidTetrominoPosition( clone ) )
-						this.currentTetromino = clone;
-				
-					// Check to see if we need to start the lock countdown for the current tetromino
-					if( this.hasCurrentTetrominoLanded() )
+					// If the lock countdown isn't running for the current tetromino
+					if( ! this.tetrominoLockCountdownRunning )
 					{
-						// Start the lock countdown
-						this.tetrominoLockCounter = 0;
-						this.tetrominoLockCountdownRunning = true;
+						// Make sure we can move the current tetromino down
+						var clone = this.currentTetromino.clone();
+						for( var n = 0; n < clone.blocks.length; ++n )
+						{
+							clone.blocks[n][1] += 1;
+						}
+
+						// Move the pivot down one block
+						clone.pivot[1] += 1;
+
+						if( this.isValidTetrominoPosition( clone ) )
+							this.currentTetromino = clone;
+					
+						// Check to see if we need to start the lock countdown for the current tetromino
+						if( this.hasCurrentTetrominoLanded() )
+						{
+							// Start the lock countdown
+							this.tetrominoLockCounter = 0;
+							this.tetrominoLockCountdownRunning = true;
+						}
 					}
 				}
 			}
@@ -296,7 +313,7 @@ app.factory( 'tetrisGame', function()
 				}
 			}
 
-			// Render the current tetrominoe
+			// Render the current tetromino
 			this.context.fillStyle = this.currentTetromino.color;
 			this.context.strokeStyle = this.currentTetromino.color;
 
@@ -310,6 +327,20 @@ app.factory( 'tetrisGame', function()
 					y * this.blockHeight,
 					this.blockWidth - 1,
 					this.blockHeight - 1 );
+			}
+
+			// If we have any effects
+			if( this.effects.length > 0 )
+			{
+				for( var n = this.effects.length - 1; n >= 0;--n )
+				{
+					// Render the effect and then check to see if it is complete
+					this.effects[n].render();
+
+					// If the effect has completed, remove it from the effects array
+					if( this.effects[n].isComplete() )
+						this.effects.splice( n, 1 );
+				}
 			}
 		},
 
@@ -330,6 +361,9 @@ app.factory( 'tetrisGame', function()
 			// Unlock the current tetromino
 			this.tetrominoLockCountdownRunning = false;
 			this.tetrominoLockCounter = 0;
+
+			// Check the board to see if any lines where made
+			this.doLineCheck();
 		},
 
 		// Returns true if the tetromino is in a valid position
@@ -453,6 +487,20 @@ app.factory( 'tetrisGame', function()
 				clone.blocks[n][1] = Math.round( clone.blocks[n][1] + clone.pivot[1] );
 			}
 
+			// If the pivot point isn't a while number
+			if( clone.pivot[0] % 1 !== 1 || clone.pivot[1] % 1 !== 1 )
+			{
+				// Rotate the pivot point around the origin
+				var decimalPivotX = clone.pivot[0] % 1;
+				var decimalPivotY = clone.pivot[1] % 1;
+
+				var wholePivotX = Math.floor( clone.pivot[0] );
+				var wholePivotY = Math.floor( clone.pivot[1] );
+
+				clone.pivot[0] = ( -1 * decimalPivotX ) + wholePivotX;
+				clone.pivot[1] = decimalPivotY + wholePivotY;
+			}
+
 			// See if the tetromino has space on the board
 			var validRotation = this.validateTetrominoRotation( clone );
 			if( validRotation !== false )
@@ -478,8 +526,8 @@ app.factory( 'tetrisGame', function()
 		// Called when the user wants to rotate the current tetromino counter clockwise
 		onTetrominoCounterClockwise: function()
 		{
-			// If the game hasn't been initialized, or is paused, return
-			if( ! this.initialized || this.paused )
+			// If the game hasn't been initialized, or is paused, or we have effects, return
+			if( ! this.initialized || this.paused || this.effects.length )
 				return;
 
 			// Clone the current tetromino
@@ -537,8 +585,11 @@ app.factory( 'tetrisGame', function()
 				// A list of all the translations we need to try to find 
 				// a valid position for the rotated tetromino
 				var validTranslations = Array(
-					[-1, 0],
-					[1, 0]
+					[-1,  0],
+					[1,   0],
+					[-2,  0],
+					[-1, -1],
+					[1,   1]
 				);
 
 				// Try translating the clone by each of the valid translations until we find one 
@@ -586,8 +637,8 @@ app.factory( 'tetrisGame', function()
 		// Called when the user wants to move the current tetromino right
 		onTetrominoRight: function()
 		{
-			// If the game hasn't been initialized, or is paused, return
-			if( ! this.initialized || this.paused )
+			// If the game hasn't been initialized, or is paused, or we have any effects, return
+			if( ! this.initialized || this.paused || this.effects.length > 0 )
 				return;
 
 			// Clone the current tetromino
@@ -631,8 +682,8 @@ app.factory( 'tetrisGame', function()
 		// Called when the user wants to move the current tetromino right
 		onTetrominoLeft: function()
 		{
-			// If the game hasn't been initialized, or is paused, return
-			if( ! this.initialized || this.paused )
+			// If the game hasn't been initialized, or is paused, or if we have any effects
+			if( ! this.initialized || this.paused || this.effects.length > 0 )
 				return;
 
 			// Clone the current tetromino
@@ -704,6 +755,126 @@ app.factory( 'tetrisGame', function()
 			this.currentTetromino = this.generateTetromino();
 		},
 
+		doLineCheck: function()
+		{
+			// An array to keep track of the row of any lines we've made
+			var lines = Array();
+
+			// Foreach row on the board
+			for( var y = 0; y < this.board[0].length; ++y )
+			{
+				// A flag to break the loop when we find an empty cell
+				var openCell = false;
+
+				// Foreach column in the current row
+				for( var x = 0; ( x < this.board.length && ! openCell ); ++x )
+				{
+					if( typeof this.board[x][y] !== 'string' )
+						openCell = true;
+				}
+
+				// If we found a row with no empty cells in it, add it to the lines array
+				if( ! openCell )
+					lines.push( y );
+			}
+
+			// If the player made any lines
+			if( lines.length > 0 )
+			{
+				// For each line
+				for( var n = 0; n < lines.length; ++n )
+				{
+					var y = lines[n];
+
+					// Increment the total number of lines that player has made so far
+					this.total_num_lines++;
+
+					// For each cell in the current line
+					for( var x = 0; x < this.board.length; ++x )
+					{
+						// Set the cell value to 0 to mark it as an empty cell
+						this.board[x][y] = 0;
+					}
+
+					// Create a fade out effect for the current line
+					this.generateLineFade( y );
+				}
+			}
+		},
+
+		// Generates a fade out effect for a given line
+		generateLineFade: function( lineNum )
+		{
+			var blockHeight = this.blockHeight;
+			var boardWidth = this.width;
+			var context = this.context;
+			var board = this.board;
+
+			var fadeEffect = {
+				lineNumber: lineNum,
+				blockHeight: blockHeight,
+				boardWidth: boardWidth,
+				board: board,
+
+				// The drawing context
+				context: context,
+
+				// The alpha value to use for this line
+				alpha: 1,
+
+				// Updates the fading line.  elapsedTime is the amount of time that has
+				// elapsed since the last update
+				update: function( elapsedTime )
+				{
+					// Reduce the alpha value
+					this.alpha -= elapsedTime * 0.001;
+					this.alpha = parseFloat( this.alpha.toFixed( 2 ) );
+
+					// If the alpha value is 0 or less
+					if( this.alpha <= 0 )
+					{
+						// Drop each block down a line on the board
+						for( var y = this.lineNumber; y > 0; --y)
+						{
+							for( var x = 0; x < this.board.length; ++x )
+							{
+								if( typeof this.board[x][y - 1] === 'string' )
+								{
+									this.board[x][y] = this.board[x][y - 1];
+									this.board[x][y - 1] = 0;
+								}
+							}
+						}
+					}
+				},
+
+				render: function()
+				{
+					// Only render if the alpha is > zero
+					if( this.alpha > 0 )
+					{
+						this.context.fillStyle = 'rgba( 256, 256, 256, ' + this.alpha + ' )';
+						this.context.strokeStyle = 'rgba( 256, 256, 256, ' + this.alpha + ' )';
+
+						this.context.fillRect(
+							0,
+							this.lineNumber * this.blockHeight,
+							this.boardWidth - 1,
+							this.blockHeight - 1 );
+					}
+				},
+
+				// Returns true if this effect has been completed
+				isComplete: function()
+				{
+					// This effect will finish after 1 second (when alpha is zero)
+					return this.alpha <= 0;
+				}
+			};
+
+			this.effects.push( fadeEffect );
+		},
+
 		debug: function()
 		{
 			console.log( this.currentTetromino );
@@ -722,10 +893,7 @@ app.factory( 'tetrisGame', function()
 				this.paused = true;
 			else
 				this.paused = false;
-		},
-
-		// A function so I don't have to remember not to have a comma at the end (thanks IE!)
-		commaBait: function(){}
+		}
 	};
 
 	return tetrisGame;
@@ -806,7 +974,7 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 		Sorry, but your browser doesn't support HTML5 :(
 	</canvas>
 
-	<div>Lock counter: {{tetrisGame.tetrominoLockCounter}}</div>
+	<div>Lines: {{tetrisGame.total_num_lines}}</div>
 	<div>Step: {{tetrisGame.step}}</div>
 	<div>elapsedTime: {{tetrisGame.elapsedTime}}</div>
 
