@@ -111,24 +111,24 @@ app.factory( 'tetrisGame', function()
 
 			// A list of all possible blocks (Note: Need to figure out a center block for each tetromino)
 			this.possibleTetrominoes = Array(
-				Array( [0,0], [0,1], [0,2], [0,3] ), // i shaped block
-				Array( [1,0], [1,1], [0,2], [1,2] ), // j shaped block
-				Array( [0,0], [0,1], [0,2], [1,2] ), // l shaped block
-				Array( [0,0], [1,0], [0,1], [1,1] ), // o shaped block
-				Array( [0,0], [1,0], [1,1], [2,1] ), // z shaped block
-				Array( [1,0], [0,1], [1,1], [2,1] ), // t shaped block
-				Array( [0,1], [1,0], [1,1], [2,0] )  // s shaped block
+				Array( [4,-1], [5,-1], [6,-1], [7,-1] ), // i shaped block
+				Array( [5,-2], [4,-2], [3,-1], [3,-2] ), // j shaped block
+				Array( [5,-1], [4,-1], [3,-1], [3,-2] ), // l shaped block
+				Array( [5,-1], [5,-2], [4,-1], [4,-2] ), // o shaped block
+				Array( [3,-1], [4,-1], [4,-2], [5,-1] ), // z shaped block
+				Array( [4,-2], [3,-1], [4,-1], [5,-1] ), // t shaped block
+				Array( [3,-2], [4,-1], [4,-2], [5,-1] )  // s shaped block
 			);
 
 			// A list of pivot points for each of the above tetromino block groups
 			this.pivotPoints = Array(
-				[0,	  1],   // i shaped block
-				[1,   1],   // j shaped block
-				[0,   1],   // l shaped block 
-				[0.5, 0.5], // o shaped block
-				[1,   1],   // z shaped block 
-				[1,   1],	// t shaped block 
-				[1,   1]    // s shaped block 
+				[5,	 -1],   // i shaped block
+				[4,  -2],   // j shaped block
+				[4,  -1],   // l shaped block 
+				[4.5,-1.5], // o shaped block
+				[4,  -1],   // z shaped block 
+				[4,  -1],   // t shaped block 
+				[4,  -1]    // s shaped block 
 			);
 
 			// A list of all possible tetromino colors
@@ -174,6 +174,8 @@ app.factory( 'tetrisGame', function()
 			// Choose a random tetromino
 			var rand = this.rand( 0, this.possibleTetrominoes.length );
 
+			rand = 6;
+
 			var tetromino = {
 				blocks: this.possibleTetrominoes[ rand ],
 				pivot: this.pivotPoints[ rand ],
@@ -201,10 +203,6 @@ app.factory( 'tetrisGame', function()
 					return clone;
 				}
 			};
-
-			// Position the new tetromino above the board
-			// All tetrominoes spawn in 2 usually hidden rows at the top of the playfield.
-			// They are placed in the center of these rows, rounding to the left. 
 
 			return tetromino
 		},
@@ -328,6 +326,16 @@ app.factory( 'tetrisGame', function()
 					this.blockWidth - 1,
 					this.blockHeight - 1 );
 			}
+
+			// Render the current tetromino's pivot point
+			this.context.fillStyle = '#EEEEEE';
+			this.context.strokeStyle = '#EEEEEE';
+
+			this.context.fillRect(
+					this.currentTetromino.pivot[0] * this.blockWidth,
+					this.currentTetromino.pivot[1] * this.blockHeight,
+					this.blockWidth - 1,
+					this.blockHeight - 1 );
 
 			// If we have any effects
 			if( this.effects.length > 0 )
@@ -485,20 +493,6 @@ app.factory( 'tetrisGame', function()
 				// Move the current block back into it's position using the pivot point
 				clone.blocks[n][0] = Math.round( clone.blocks[n][0] + clone.pivot[0] );
 				clone.blocks[n][1] = Math.round( clone.blocks[n][1] + clone.pivot[1] );
-			}
-
-			// If the pivot point isn't a while number
-			if( clone.pivot[0] % 1 !== 1 || clone.pivot[1] % 1 !== 1 )
-			{
-				// Rotate the pivot point around the origin
-				var decimalPivotX = clone.pivot[0] % 1;
-				var decimalPivotY = clone.pivot[1] % 1;
-
-				var wholePivotX = Math.floor( clone.pivot[0] );
-				var wholePivotY = Math.floor( clone.pivot[1] );
-
-				clone.pivot[0] = ( -1 * decimalPivotX ) + wholePivotX;
-				clone.pivot[1] = decimalPivotY + wholePivotY;
 			}
 
 			// See if the tetromino has space on the board
