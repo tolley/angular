@@ -236,6 +236,13 @@ app.factory( 'tetrisGame', function()
 					{
 						this.lockCurrentTetromino();
 					}
+					else if( ! this.isTetrominoOnBoard( this.currentTetromino ) )
+					{
+						// Verify that the tetromino is on the board
+						// If the current tetromino can't find a place on the board, this means
+						// the player has lost and the game is over
+						this.gameOver();
+					}
 				}
 				else if( this.elapsedTime >= this.step )
 				{
@@ -856,6 +863,28 @@ app.factory( 'tetrisGame', function()
 			};
 
 			this.effects.push( fadeEffect );
+		},
+
+		// Returns false if any of the tetromino's blocks aren't on the visible board
+		isTetrominoOnBoard: function( tetromino )
+		{
+			// The return value
+			var isOnBoard = true;
+
+			// For each block in the tetromino, see if it's off the visible board
+			for( var n = 0; ( n < tetromino.blocks.length && isOnBoard ); ++n )
+			{
+				if( tetromino.blocks[n][1] < 0 )
+					isOnBoard = false;
+			}
+
+			return isOnBoard;
+		},
+
+		gameOver: function()
+		{
+			alert( 'Game Over');
+			this.paused = true;
 		},
 
 		debug: function()
