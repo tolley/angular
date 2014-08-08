@@ -174,8 +174,6 @@ app.factory( 'tetrisGame', function()
 			// Choose a random tetromino
 			var rand = this.rand( 0, this.possibleTetrominoes.length );
 
-			rand = 6;
-
 			var tetromino = {
 				blocks: this.possibleTetrominoes[ rand ],
 				pivot: this.pivotPoints[ rand ],
@@ -326,16 +324,6 @@ app.factory( 'tetrisGame', function()
 					this.blockWidth - 1,
 					this.blockHeight - 1 );
 			}
-
-			// Render the current tetromino's pivot point
-			this.context.fillStyle = '#EEEEEE';
-			this.context.strokeStyle = '#EEEEEE';
-
-			this.context.fillRect(
-					this.currentTetromino.pivot[0] * this.blockWidth,
-					this.currentTetromino.pivot[1] * this.blockHeight,
-					this.blockWidth - 1,
-					this.blockHeight - 1 );
 
 			// If we have any effects
 			if( this.effects.length > 0 )
@@ -582,6 +570,7 @@ app.factory( 'tetrisGame', function()
 					[-1,  0],
 					[1,   0],
 					[-2,  0],
+					[2,   0],
 					[-1, -1],
 					[1,   1]
 				);
