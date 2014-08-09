@@ -375,19 +375,35 @@ app.factory( 'tetrisGame', function()
 			}
 			while( ! this.hasTetrominoLanded( ghost ) );
 
-			// Render the ghost in it's lowest possible position
-			this.context.fillStyle = 'rgba( 238, 238, 238, 0.5 )';
-//			this.context.strokeStyle = 'rgba( 238, 238, 238, ' + this.alpha + ' )';
-			this.context.strokeStyle = '#000000';
-
-			for( var n = 0; n < ghost.blocks.length; ++n )
+			// Determine whether the ghost is intersecting with the current tetromino
+			var bIntersecting = false;
+			for( var n = 0; ( n < this.currentTetromino.blocks.length && ! bIntersecting ); ++n )
 			{
-				this.context.fillRect(
-					ghost.blocks[n][0] * this.blockWidth,
-					ghost.blocks[n][1] * this.blockHeight,
-					this.blockWidth - 1,
-					this.blockHeight - 1
-				);
+				for( var m = 0; ( m < ghost.blocks.length && ! bIntersecting ); ++m )
+				{
+					if( this.currentTetromino.blocks[n][0] == ghost.blocks[m][0] && 
+						this.currentTetromino.blocks[n][1] == ghost.blocks[m][1] )
+							bIntersecting = true;
+				}
+			}
+
+			// If the current tetromino is not sharing a block with the ghost
+			if( ! bIntersecting )
+			{
+				// Render the ghost in it's lowest possible position
+				this.context.fillStyle = 'rgba( 238, 238, 238, 0.5 )';
+//				this.context.strokeStyle = 'rgba( 238, 238, 238, ' + this.alpha + ' )';
+				this.context.strokeStyle = '#000000';
+
+				for( var n = 0; n < ghost.blocks.length; ++n )
+				{
+					this.context.fillRect(
+						ghost.blocks[n][0] * this.blockWidth,
+						ghost.blocks[n][1] * this.blockHeight,
+						this.blockWidth - 1,
+						this.blockHeight - 1
+					);
+				}
 			}
 		},
 
@@ -1018,14 +1034,34 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 	$scope.tetrisGame.initialize( 'tetris' );
 
 	// Called when a key press is detected
-	$scope.onKeyPress = function( $event )
+	$scope.onKeyDown = function( $event )
 	{
 		if( ! $event )
 			return;
 
-		// Switch based on the keycode in the event
-		switch( $event.keyCode )
+		// Switch based on which key was pressed
+		switch( $event.which )
 		{
+			// The space bar, paused the game
+			case 32:
+				tetrisGame.togglePause();
+				break;
+
+			// The D key (rotate counter clockwise)
+			case 68:
+				tetrisGame.onTetrominoCounterClockwise();
+				break;
+
+			// The F key (rotate clockwise)
+			case 70:
+				tetrisGame.onTetrominoClockwise();
+				break;
+
+			// The S key, shows debug
+			case 83:
+				tetrisGame.debug();
+				break;
+
 			// The down arrow (move the tetromino down one block)
 			case 40:
 				tetrisGame.onTetrominoDown();
@@ -1045,46 +1081,15 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 			case 39:
 				tetrisGame.onTetrominoRight();
 				break;
-
-			// The down arrow
-			case 40:
-				break;
-
-			// Handle keys that don't have a keycode
-			case 0:
-				switch( $event.charCode )
-				{
-					// The S key, shows debug
-					case 115:
-						tetrisGame.debug();
-						break;
-
-					// The space bar (pause)
-					case 32:
-						tetrisGame.togglePause();
-						break;
-
-					// The D key (rotate counter clockwise)
-					case 100:
-						tetrisGame.onTetrominoCounterClockwise();
-						break;
-
-					// The F key (rotate clockwise)
-					case 102:
-						tetrisGame.onTetrominoClockwise();
-						break;
-				}
-				break;
 		}
 	}
-
 } ] );
 
 </script>
 
 </head>
 
-<body ng-controller="tetrisController" ng-keypress="onKeyPress( $event )">
+<body ng-controller="tetrisController" ng-keydown="onKeyDown( $event )">
 
 	<canvas id="tetris" height="400" width="225">
 		Sorry, but your browser doesn't support HTML5 :(
