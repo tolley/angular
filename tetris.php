@@ -76,14 +76,17 @@ app.factory( 'tetrisGame', function()
 			this.blockWidth = this.width / 10;
 			this.blockHeight = this.height / 20;
 
-			// The speed for steps between block falls
+			// The speed (in milliseconds) for steps between block falls
 			this.step = 700;
+
+			// The level that the player is on.  This is used to update the step speed every 10 lines
+			this.level = 0;
 
 			// The counter that tells us when to move onto the next tetromino
 			this.tetrominoLockCounter = 0;
 
-			// The maximum time to wait to lock the current tetromino
-			this.tetrominoLockTimeout = 1000; // this.step;
+			// The maximum time (in milliseconds) to wait to lock the current tetromino
+			this.tetrominoLockTimeout = 700;
 
 			// A flag to indicate the lock countdown is running
 			this.tetrominoLockCountdownRunning = false;
@@ -95,21 +98,21 @@ app.factory( 'tetrisGame', function()
 			// A variable that will keep track of the total number of lines the player has made
 			this.total_num_lines = 0;
 
-			// The actual board (Note: it's sideways so x will be the horizontal coord and y will be the vertical coord)
-			this.board = Array(
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ),
-				Array( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 )
-			);
+			// Generate the actual board (initially populate it with zeros)
+			this.board = Array();
+			this.boardWidth = 10;
+			this.boardHeight = 20;
 
-			// A list of all possible blocks (Note: Need to figure out a center block for each tetromino)
+			for( var x = 0; x < this.boardWidth; ++x )
+			{
+				var row = Array();
+				for( var y = 0; y < this.boardHeight; ++y )
+					row.push( 0 );
+
+				this.board.push( row );
+			}
+
+			// A list of all possible blocks
 			this.possibleTetrominoes = Array(
 				Array( [4,-1], [5,-1], [6,-1], [7,-1] ), // i shaped block
 				Array( [5,-2], [4,-2], [3,-1], [3,-2] ), // j shaped block
@@ -713,6 +716,50 @@ app.factory( 'tetrisGame', function()
 			this.render();
 		},
 
+		// Moves the current tetromino down one row
+		onTetrominoDown: function()
+		{
+			// If the game hasn't been initialized, or is paused, or if we have any effects
+			if( ! this.initialized || this.paused || this.effects.length > 0 )
+				return;
+
+			// Clone the current tetromino
+			var clone = this.currentTetromino.clone();
+
+			// Move the clone left
+			for( var n = 0; n < clone.blocks.length; ++n )
+			{
+				clone.blocks[n][1] += 1;
+			}
+
+			// Move the pivot left
+			clone.pivot[1] += 1;
+
+			// Verify that the current tetromino is in a valid position
+			if( this.isValidTetrominoPosition( clone ) )
+			{
+				this.currentTetromino = clone;
+
+				// Reset the lock countdown
+				this.tetrominoLockCounter = 0;
+
+				// If we need to start the lock countdown, do so
+				if( this.hasCurrentTetrominoLanded() )
+				{
+					this.tetrominoLockCountdownRunning = true;
+				}
+				else
+				{
+					// Otherwise, unlock the current tetromino
+					this.tetrominoLockCountdownRunning = false;
+				}
+			}
+
+			// Update and render the playing field
+			this.update();
+			this.render();
+		},
+
 		// Sends the current tetromino to it's lowest possible point and locks it
 		dropCurrentTetromino: function()
 		{
@@ -788,6 +835,17 @@ app.factory( 'tetrisGame', function()
 
 					// Create a fade out effect for the current line
 					this.generateLineFade( y );
+				}
+
+				// Determine whether or not we need to update the level
+				if( parseInt( this.total_num_lines / 10 ) > this.level )
+				{
+					this.level++;
+
+					// Deincrement the step value
+					this.step -= 50;
+					if( this.step < 100 )
+						this.step = 100;
 				}
 			}
 		},
@@ -927,8 +985,13 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 		// Switch based on the keycode in the event
 		switch( $event.keyCode )
 		{
-			// The down array (drop the current tetromino as far as it can go)
+			// The down arrow (move the tetromino down one block)
 			case 40:
+				tetrisGame.onTetrominoDown();
+				break;
+
+			// The up arrow (drop the current tetromino as far as it can go)
+			case 38:
 				tetrisGame.dropCurrentTetromino();
 				break;
 
