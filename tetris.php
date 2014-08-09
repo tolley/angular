@@ -270,7 +270,7 @@ app.factory( 'tetrisGame', function()
 							this.currentTetromino = clone;
 					
 						// Check to see if we need to start the lock countdown for the current tetromino
-						if( this.hasCurrentTetrominoLanded() )
+						if( this.hasTetrominoLanded( this.currentTetromino ) )
 						{
 							// Start the lock countdown
 							this.tetrominoLockCounter = 0;
@@ -319,6 +319,9 @@ app.factory( 'tetrisGame', function()
 				}
 			}
 
+			// Render the ghost tetromino on the board
+			this.renderGhostTetromino();
+
 			// Render the current tetromino
 			this.context.fillStyle = this.currentTetromino.color;
 			this.context.strokeStyle = this.currentTetromino.color;
@@ -347,6 +350,44 @@ app.factory( 'tetrisGame', function()
 					if( this.effects[n].isComplete() )
 						this.effects.splice( n, 1 );
 				}
+			}
+		},
+
+		// Renders the preview (ghost) tetromino onto the board so the user can see where the current
+		// will land
+		renderGhostTetromino: function()
+		{
+			// If the current tetromino has already landed, don't render the ghost
+			if( this.hasTetrominoLanded( this.currentTetromino ) )
+				return;
+
+			// Clone the current tetromino
+			var ghost = this.currentTetromino.clone();
+
+			// Move the ghost down until it can't go any further down
+			do
+			{
+				// Foreach block in the tetromino, move it down by one
+				for( var n = 0; n < ghost.blocks.length; ++n )
+				{
+					ghost.blocks[n][1] += 1;
+				}
+			}
+			while( ! this.hasTetrominoLanded( ghost ) );
+
+			// Render the ghost in it's lowest possible position
+			this.context.fillStyle = 'rgba( 238, 238, 238, 0.5 )';
+//			this.context.strokeStyle = 'rgba( 238, 238, 238, ' + this.alpha + ' )';
+			this.context.strokeStyle = '#000000';
+
+			for( var n = 0; n < ghost.blocks.length; ++n )
+			{
+				this.context.fillRect(
+					ghost.blocks[n][0] * this.blockWidth,
+					ghost.blocks[n][1] * this.blockHeight,
+					this.blockWidth - 1,
+					this.blockHeight - 1
+				);
 			}
 		},
 
@@ -437,24 +478,24 @@ app.factory( 'tetrisGame', function()
 		},
 
 		// Returns true if the tetromino is at it's lowest possible position
-		hasCurrentTetrominoLanded: function()
+		hasTetrominoLanded: function( tetromino )
 		{
 			// The return value
 			var returnValue = false;
 
 			// For each block in the current tetromino
-			for( var n = 0; ( n < this.currentTetromino.blocks.length ) && ( ! returnValue ); ++n )
+			for( var n = 0; ( n < tetromino.blocks.length ) && ( ! returnValue ); ++n )
 			{
 				// If the current block is at the bottom of the playing field
-				if( this.currentTetromino.blocks[n][1] === this.board[ this.currentTetromino.blocks[n][0] ].length - 1 )
+				if( tetromino.blocks[n][1] === this.board[ tetromino.blocks[n][0] ].length - 1 )
 				{
 					returnValue = true;
 				}
 				else
 				{
 					// Otherwise, see if the current block is resting on another block
-					var x = this.currentTetromino.blocks[n][0];
-					var y = this.currentTetromino.blocks[n][1];
+					var x = tetromino.blocks[n][0];
+					var y = tetromino.blocks[n][1];
 
 					if( x < this.board.length && y < this.board[x].length && typeof this.board[x][y + 1] === 'string' )
 					{
@@ -499,7 +540,7 @@ app.factory( 'tetrisGame', function()
 				this.currentTetromino = validRotation;
 
 			// If we need to start the lock countdown, do so
-			if( this.hasCurrentTetrominoLanded() )
+			if( this.hasTetrominoLanded( this.currentTetromino ) )
 			{
 				this.tetrominoLockCountdownRunning = true;
 			}
@@ -548,7 +589,7 @@ app.factory( 'tetrisGame', function()
 				this.currentTetromino = validRotation;
 
 			// If we need to start the lock countdown, do so
-			if( this.hasCurrentTetrominoLanded() )
+			if( this.hasTetrominoLanded( this.currentTetromino ) )
 			{
 				this.tetrominoLockCountdownRunning = true;
 			}
@@ -655,7 +696,7 @@ app.factory( 'tetrisGame', function()
 				this.tetrominoLockCounter = 0;
 
 				// If we need to start the lock countdown, do so
-				if( this.hasCurrentTetrominoLanded() )
+				if( this.hasTetrominoLanded( this.currentTetromino ) )
 				{
 					this.tetrominoLockCountdownRunning = true;
 				}
@@ -700,7 +741,7 @@ app.factory( 'tetrisGame', function()
 				this.tetrominoLockCounter = 0;
 
 				// If we need to start the lock countdown, do so
-				if( this.hasCurrentTetrominoLanded() )
+				if( this.hasTetrominoLanded( this.currentTetromino ) )
 				{
 					this.tetrominoLockCountdownRunning = true;
 				}
@@ -744,7 +785,7 @@ app.factory( 'tetrisGame', function()
 				this.tetrominoLockCounter = 0;
 
 				// If we need to start the lock countdown, do so
-				if( this.hasCurrentTetrominoLanded() )
+				if( this.hasTetrominoLanded( this.currentTetromino ) )
 				{
 					this.tetrominoLockCountdownRunning = true;
 				}
@@ -786,7 +827,7 @@ app.factory( 'tetrisGame', function()
 				if( this.isValidTetrominoPosition( clone ) )
 					this.currentTetromino = clone;
 			}
-			while( ! this.hasCurrentTetrominoLanded() );
+			while( ! this.hasTetrominoLanded( this.currentTetromino ) );
 
 			this.lockCurrentTetromino();
 			this.currentTetromino = this.generateTetromino();
