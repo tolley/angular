@@ -47,7 +47,7 @@ app.factory( 'tetrisGame', function()
 		},
 
 		// A method to initialize this instance of the game
-		initialize: function( boardId )
+		initialize: function( boardId, previewId )
 		{
 			// If the game has already been initialized, return
 			if( this.initialized )
@@ -76,6 +76,29 @@ app.factory( 'tetrisGame', function()
 			this.blockWidth = this.width / 10;
 			this.blockHeight = this.height / 20;
 
+			// The canvas and context to use to render the next tetromino that will drop
+			this.nextTetrominoCanvas = false;
+			this.nextTetrominoContext = false;
+			if( typeof previewId == 'string' && previewId.length > 0 )
+			{
+				// Get the next tetromino canvas object from the document
+				this.nextTetrominoCanvas = document.getElementById( previewId );
+
+				// If we where able to get the canvas
+				if( this.nextTetrominoCanvas )
+				{
+					// Get the drawing context
+					this.nextTetrominoContext = this.nextTetrominoCanvas.getContext( '2d' );
+
+					// Translate the origin so the blocks will appear on the smaller canvas
+					// instead of being rendered off the canvas
+//					this.nextTetrominoContext.translate( 0, -2 * this.blockHeight );
+
+					// tolley
+//					console.log( 0, -2 * this.blockHeight );
+				}
+			}
+
 			// The speed (in milliseconds) for steps between block falls
 			this.step = 700;
 
@@ -97,6 +120,10 @@ app.factory( 'tetrisGame', function()
 
 			// A variable that will keep track of the total number of lines the player has made
 			this.total_num_lines = 0;
+
+			// A flag to keep track of whether or not the current tetromino has been swapped
+			// A tetromino can only be swapped once
+			this.swapped = false;
 
 			// Generate the actual board (initially populate it with zeros)
 			this.board = Array();
@@ -178,6 +205,7 @@ app.factory( 'tetrisGame', function()
 			var rand = this.rand( 0, this.possibleTetrominoes.length );
 
 			var tetromino = {
+				index: rand,
 				blocks: this.possibleTetrominoes[ rand ],
 				pivot: this.pivotPoints[ rand ],
 				color: this.tetrominoColors[ this.rand( 0, this.tetrominoColors.length ) ],
@@ -187,6 +215,7 @@ app.factory( 'tetrisGame', function()
 				{
 					var clone = {};
 					clone.color = this.color;
+					clone.index = this.index;
 
 					// Deep copy the pivot point coordinates (cause JS copies arrays by reference)
 					clone.pivot = Array( 2 );
@@ -351,6 +380,34 @@ app.factory( 'tetrisGame', function()
 						this.effects.splice( n, 1 );
 				}
 			}
+
+			// Render the next tetromino if there is a context for it
+			if( this.nextTetrominoContext )
+			{
+				// Clear the canvas
+				this.nextTetrominoCanvas.width = this.nextTetrominoCanvas.width;
+				this.nextTetrominoCanvas.height = this.nextTetrominoCanvas.height;
+
+				// Draw a black rectangle on our canvas
+				this.nextTetrominoContext.fillStyle = this.bgcolor;
+				this.nextTetrominoContext.fillRect( 0, 0, this.width, this.height );
+
+				// Render each block on the next tetromino
+				this.nextTetrominoContext.fillStyle = this.nextTetromino.color;
+				this.nextTetrominoContext.strokeStyle = this.nextTetromino.color;
+
+				for( var n = 0; n < this.nextTetromino.blocks.length; ++n )
+				{
+					var x = this.nextTetromino.blocks[n][0];
+					var y = this.nextTetromino.blocks[n][1];
+
+					this.nextTetrominoContext.fillRect(
+						( x - 2 ) * this.blockWidth,
+						( y * -1 ) * this.blockHeight,
+						this.blockWidth - 1,
+						this.blockHeight - 1 );
+				}
+			}
 		},
 
 		// Renders the preview (ghost) tetromino onto the board so the user can see where the current
@@ -392,12 +449,21 @@ app.factory( 'tetrisGame', function()
 			{
 				// Render the ghost in it's lowest possible position
 				this.context.fillStyle = 'rgba( 238, 238, 238, 0.5 )';
-//				this.context.strokeStyle = 'rgba( 238, 238, 238, ' + this.alpha + ' )';
-				this.context.strokeStyle = '#000000';
 
 				for( var n = 0; n < ghost.blocks.length; ++n )
 				{
+					// Render the block as a half transparent block
+					this.context.strokeStyle = 'rgba( 238, 238, 238, 0.5 )';
 					this.context.fillRect(
+						ghost.blocks[n][0] * this.blockWidth,
+						ghost.blocks[n][1] * this.blockHeight,
+						this.blockWidth - 1,
+						this.blockHeight - 1
+					);
+
+					// Render a white line around the block
+					this.context.strokeStyle = '#EEEEEE';
+					this.context.strokeRect(
 						ghost.blocks[n][0] * this.blockWidth,
 						ghost.blocks[n][1] * this.blockHeight,
 						this.blockWidth - 1,
@@ -424,6 +490,9 @@ app.factory( 'tetrisGame', function()
 			// Unlock the current tetromino
 			this.tetrominoLockCountdownRunning = false;
 			this.tetrominoLockCounter = 0;
+
+			// Set the swapped flag to false
+			this.swapped = false;
 
 			// Check the board to see if any lines where made
 			this.doLineCheck();
@@ -846,7 +915,6 @@ app.factory( 'tetrisGame', function()
 			while( ! this.hasTetrominoLanded( this.currentTetromino ) );
 
 			this.lockCurrentTetromino();
-			this.currentTetromino = this.generateTetromino();
 		},
 
 		doLineCheck: function()
@@ -904,6 +972,26 @@ app.factory( 'tetrisGame', function()
 					if( this.step < 100 )
 						this.step = 100;
 				}
+			}
+		},
+
+		// Swaps the current tetromino with the one in storage.  If there is none in storage
+		// it will be swapped with the next tetromino
+		swap: function()
+		{
+			// If the current tetromino has already been swapped, return, cause you
+			// can only swap once per tetromino
+			if( this.swapped )
+				return;
+
+			// Set the swapped flag to true so we can't swap again
+			this.swapped = true;
+
+			// If there is a tetromino that was previously swapped
+			if( this.swappedTetromino )
+			{
+//				var tempTetromino = this.currentTetromino;
+//				this.currentTetromino 
 			}
 		},
 
@@ -996,30 +1084,19 @@ app.factory( 'tetrisGame', function()
 			return isOnBoard;
 		},
 
+		// Pauses or unpauses the game
+		togglePause: function()
+		{
+			if( this.paused )
+				this.paused = false;
+			else
+				this.paused = true;
+		},
+
 		gameOver: function()
 		{
 			alert( 'Game Over');
 			this.paused = true;
-		},
-
-		debug: function()
-		{
-			console.log( this.currentTetromino );
-
-/*			for( var n = 0; n < this.board.length; ++n )
-			{
-				console.log( this.board[n], this.board[n].length );
-			}
-*/
-		},
-
-		// Pauses the game
-		togglePause: function()
-		{
-			if( ! this.paused )
-				this.paused = true;
-			else
-				this.paused = false;
 		}
 	};
 
@@ -1031,7 +1108,7 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 {
 	// Create our tetris game
 	$scope.tetrisGame = tetrisGame;
-	$scope.tetrisGame.initialize( 'tetris' );
+	$scope.tetrisGame.initialize( 'tetris', 'preview' );
 
 	// Called when a key press is detected
 	$scope.onKeyDown = function( $event )
@@ -1057,9 +1134,9 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 				tetrisGame.onTetrominoClockwise();
 				break;
 
-			// The S key, shows debug
+			// The S key, swap the current tetromino
 			case 83:
-				tetrisGame.debug();
+				tetrisGame.swap();
 				break;
 
 			// The down arrow (move the tetromino down one block)
@@ -1094,6 +1171,14 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 	<canvas id="tetris" height="400" width="225">
 		Sorry, but your browser doesn't support HTML5 :(
 	</canvas>
+
+	Next Block
+	<canvas id="preview" height="80" width="100"></canvas>
+
+	<br />
+	Swapped Block
+	<canvas id="swapped" height="80" width="80"></canvas>
+
 
 	<div>Lines: {{tetrisGame.total_num_lines}}</div>
 	<div>Step: {{tetrisGame.step}}</div>
