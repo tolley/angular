@@ -33,12 +33,68 @@ var timer = ( function()
 // Define our main app
 var app = angular.module( 'myApp', [] );
 
+// Define the directive that will allow us to display the board
+app.directive( 'tetris', function()
+{
+	return {
+		restrict: 'E',
+		replace: 'true',
+		templateUrl: 'tetris_template.html',
+
+		link: function( scope, elem, attrs )
+		{
+			// Get all of the canvas elements from the main element
+			var canvi = elem.find( 'canvas' );
+
+			// Assign each of the canvas elements to the tetris game attributes
+			for( var n = 0; n < canvi.length; ++n )
+			{
+				switch( canvi[n].id ) 
+				{
+					case 'tetrisField':
+						scope.tetrisGame.canvasElem = canvi[n];
+						scope.tetrisGame.context = canvi[n].getContext( '2d' );
+						break;
+
+					case 'tetrominoPreview':
+						scope.tetrisGame.nextTetrominoCanvas = canvi[n];
+						scope.tetrisGame.nextTetrominoContext = canvi[n].getContext( '2d' );
+						break;
+
+					case 'swappedTetromino':
+						scope.swappedTetrominoCanvas = canvi[n];
+						scope.swappedTetrominoContext = canvi[n].getContext( '2d' );
+						break;
+				};
+			}
+
+			// If the main canvas was found, initialize our game
+			if( scope.tetrisGame.canvasElem )
+			{
+				scope.tetrisGame.initialize();
+			}
+		}
+	};
+} );
+
 // Define our tetris playing app
 app.factory( 'tetrisGame', function()
 {
 	var tetrisGame = {
 		// A variable to keep track of whether or not the game has been initialized
 		initialized: false,
+
+		// The canvas element and it's context that will display our playing field
+		canvasElem: false,
+		context: false,
+
+		// The canvas and context to use to render the next tetromino that will drop
+		nextTetrominoCanvas: false,
+		nextTetrominoContext: false,
+
+		// The canvase and context that will display the swapped tetromino
+		swappedTetrominoCanvas: false,
+		swappedTetrominoContext: false,
 
 		// Returns a random number between min and max inclusive
 		rand: function( min, max )
@@ -47,26 +103,13 @@ app.factory( 'tetrisGame', function()
 		},
 
 		// A method to initialize this instance of the game
-		initialize: function( boardId, previewId )
+		initialize: function()
 		{
 			// If the game has already been initialized, return
 			if( this.initialized )
 				return;
 
 			var self = this;
-
-			// Get the canvas element that will display the game state
-			this.canvasElem = document.getElementById( boardId );
-
-			// If we where unable to get the canvas element, return
-			if( ! this.canvasElem || ! this.canvasElem.getContext )
-			{
-				alert( 'Unable to find canvas element' );
-				return;
-			}
-
-			// Get the 2d drawing context for our canvas
-			this.context = this.canvasElem.getContext( '2d' );
 
 			// Get the height and width of the canvas
 			this.width = this.canvasElem.width;
@@ -75,29 +118,6 @@ app.factory( 'tetrisGame', function()
 			// Calculate the width and height of a block
 			this.blockWidth = this.width / 10;
 			this.blockHeight = this.height / 20;
-
-			// The canvas and context to use to render the next tetromino that will drop
-			this.nextTetrominoCanvas = false;
-			this.nextTetrominoContext = false;
-			if( typeof previewId == 'string' && previewId.length > 0 )
-			{
-				// Get the next tetromino canvas object from the document
-				this.nextTetrominoCanvas = document.getElementById( previewId );
-
-				// If we where able to get the canvas
-				if( this.nextTetrominoCanvas )
-				{
-					// Get the drawing context
-					this.nextTetrominoContext = this.nextTetrominoCanvas.getContext( '2d' );
-
-					// Translate the origin so the blocks will appear on the smaller canvas
-					// instead of being rendered off the canvas
-//					this.nextTetrominoContext.translate( 0, -2 * this.blockHeight );
-
-					// tolley
-//					console.log( 0, -2 * this.blockHeight );
-				}
-			}
 
 			// The speed (in milliseconds) for steps between block falls
 			this.step = 700;
@@ -204,11 +224,22 @@ app.factory( 'tetrisGame', function()
 			// Choose a random tetromino
 			var rand = this.rand( 0, this.possibleTetrominoes.length );
 
+			// Store the original blocks and pivot in case we need to reset
+			var originalBlocks = this.possibleTetrominoes[ rand ];
+			var originalPivot = this.pivotPoints[ rand ];
+
 			var tetromino = {
 				index: rand,
 				blocks: this.possibleTetrominoes[ rand ],
 				pivot: this.pivotPoints[ rand ],
 				color: this.tetrominoColors[ this.rand( 0, this.tetrominoColors.length ) ],
+
+				// Resets the coordinates in this tetromino back to their default
+				reset: function()
+				{
+					this.blocks = originalBlocks;
+					this.pivot = originalPivot;
+				},
 
 				// Returns a copy of this tetromino
 				clone: function()
@@ -229,6 +260,8 @@ app.factory( 'tetrisGame', function()
 						clone.blocks[n] = [ this.blocks[n][0], this.blocks[n][1] ];
 					}
 					clone.clone = this.clone;
+
+					clone.reset = this.reset;
 
 					return clone;
 				}
@@ -258,9 +291,9 @@ app.factory( 'tetrisGame', function()
 			}
 			else
 			{
+				// If the lock countdown is running
 				if( this.tetrominoLockCountdownRunning )
 				{
-					// If the lock countdown is running
 					// Increment the lock countdown and see if the lock countdown has expired
 					this.tetrominoLockCounter += ( time - this.currentTime );
 
@@ -408,6 +441,9 @@ app.factory( 'tetrisGame', function()
 						this.blockHeight - 1 );
 				}
 			}
+
+			// Render the swap tetromino if there is one and there's a context for it
+			// tolley
 		},
 
 		// Renders the preview (ghost) tetromino onto the board so the user can see where the current
@@ -979,6 +1015,10 @@ app.factory( 'tetrisGame', function()
 		// it will be swapped with the next tetromino
 		swap: function()
 		{
+			// If the game hasn't been initialized, or is paused, return
+			if( ! this.initialized || this.paused )
+				return;
+
 			// If the current tetromino has already been swapped, return, cause you
 			// can only swap once per tetromino
 			if( this.swapped )
@@ -987,11 +1027,26 @@ app.factory( 'tetrisGame', function()
 			// Set the swapped flag to true so we can't swap again
 			this.swapped = true;
 
+			// Reset the coords on the current tetromino
+			this.currentTetromino.reset();
+
 			// If there is a tetromino that was previously swapped
 			if( this.swappedTetromino )
 			{
-//				var tempTetromino = this.currentTetromino;
-//				this.currentTetromino 
+				// Swap the current tetromino with the one in the swap variable
+				this.currentTetromino.reset();
+				var tempTetromino = this.currentTetromino;
+				this.currentTetromino = this.swappedTetromino;
+				this.swappedTetromino = this.currentTetromino;
+			}
+			else
+			{
+				// Otherwise, we can put the current tetromino into the swap space, set
+				// the next tetromino as the current, and create a new next
+				this.currentTetromino.reset();
+				this.swappedTetromino = this.currentTetromino;
+				this.currentTetromino = this.nextTetromino;
+				this.nextTetromino = this.generateTetromino();
 			}
 		},
 
@@ -1106,11 +1161,10 @@ app.factory( 'tetrisGame', function()
 // Define the controller that will use the tetris service
 app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, tetrisGame )
 {
-	// Create our tetris game
+	// Add the tetris game to the scope
 	$scope.tetrisGame = tetrisGame;
-	$scope.tetrisGame.initialize( 'tetris', 'preview' );
 
-	// Called when a key press is detected
+	// Set up the UI calls to the tetris game
 	$scope.onKeyDown = function( $event )
 	{
 		if( ! $event )
@@ -1168,21 +1222,7 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 
 <body ng-controller="tetrisController" ng-keydown="onKeyDown( $event )">
 
-	<canvas id="tetris" height="400" width="225">
-		Sorry, but your browser doesn't support HTML5 :(
-	</canvas>
-
-	Next Block
-	<canvas id="preview" height="80" width="100"></canvas>
-
-	<br />
-	Swapped Block
-	<canvas id="swapped" height="80" width="80"></canvas>
-
-
-	<div>Lines: {{tetrisGame.total_num_lines}}</div>
-	<div>Step: {{tetrisGame.step}}</div>
-	<div>elapsedTime: {{tetrisGame.elapsedTime}}</div>
+<tetris></tetris>
 
 </body>
 
