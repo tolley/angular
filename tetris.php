@@ -62,8 +62,8 @@ app.directive( 'tetris', function()
 						break;
 
 					case 'swappedTetromino':
-						scope.swappedTetrominoCanvas = canvi[n];
-						scope.swappedTetrominoContext = canvi[n].getContext( '2d' );
+						scope.tetrisGame.swappedTetrominoCanvas = canvi[n];
+						scope.tetrisGame.swappedTetrominoContext = canvi[n].getContext( '2d' );
 						break;
 				};
 			}
@@ -161,7 +161,7 @@ app.factory( 'tetrisGame', function()
 
 			// A list of all possible blocks
 			this.possibleTetrominoes = Array(
-				Array( [4,-1], [5,-1], [6,-1], [7,-1] ), // i shaped block
+				Array( [3,-1], [4,-1], [5,-1], [6,-1] ), // i shaped block
 				Array( [5,-2], [4,-2], [3,-1], [3,-2] ), // j shaped block
 				Array( [5,-1], [4,-1], [3,-1], [3,-2] ), // l shaped block
 				Array( [5,-1], [5,-2], [4,-1], [4,-2] ), // o shaped block
@@ -423,11 +423,15 @@ app.factory( 'tetrisGame', function()
 
 				// Draw a black rectangle on our canvas
 				this.nextTetrominoContext.fillStyle = this.bgcolor;
-				this.nextTetrominoContext.fillRect( 0, 0, this.width, this.height );
+				this.nextTetrominoContext.fillRect( 0, 0, 
+					this.nextTetrominoCanvas.width, this.nextTetrominoCanvas.height );
 
 				// Render each block on the next tetromino
 				this.nextTetrominoContext.fillStyle = this.nextTetromino.color;
 				this.nextTetrominoContext.strokeStyle = this.nextTetromino.color;
+
+				// Scale the canvas so the next tetromino will fit properly
+				this.nextTetrominoContext.scale( 0.7, 0.7 );
 
 				for( var n = 0; n < this.nextTetromino.blocks.length; ++n )
 				{
@@ -442,8 +446,42 @@ app.factory( 'tetrisGame', function()
 				}
 			}
 
-			// Render the swap tetromino if there is one and there's a context for it
-			// tolley
+			// If there is a context for rendering the swapped tetromino
+			if( this.swappedTetrominoContext )
+			{
+				// Clear the canvas
+				this.swappedTetrominoCanvas.width = this.swappedTetrominoCanvas.width;
+				this.swappedTetrominoCanvas.height = this.swappedTetrominoCanvas.height;
+
+				// Draw a black rectangle on our canvas
+				this.swappedTetrominoContext.fillStyle = this.bgcolor;
+				this.swappedTetrominoContext.fillRect( 0, 0, 
+						this.swappedTetrominoCanvas.width, this.swappedTetrominoCanvas.height );
+
+				// Scale the canvas so the swapped tetromino will fit properly
+				this.swappedTetrominoContext.scale( 0.7, 0.7 );
+
+				// If there is a swapped tetromino, render it
+				if( this.swappedTetromino )
+				{
+					// Render each block on the swapped tetromino
+					this.swappedTetrominoContext.fillStyle = this.swappedTetromino.color;
+					this.swappedTetrominoContext.strokeStyle = this.swappedTetromino.color;
+
+					for( var n = 0; n < this.swappedTetromino.blocks.length; ++n )
+					{
+						var x = this.swappedTetromino.blocks[n][0];
+						var y = this.swappedTetromino.blocks[n][1];
+
+						this.swappedTetrominoContext.fillRect(
+							( x - 2 ) * this.blockWidth,
+							( y * -1 ) * this.blockHeight,
+							this.blockWidth - 1,
+							this.blockHeight - 1
+						);
+					}
+				}
+			}
 		},
 
 		// Renders the preview (ghost) tetromino onto the board so the user can see where the current
@@ -1024,7 +1062,7 @@ app.factory( 'tetrisGame', function()
 			if( this.swapped )
 				return;
 
-			// Set the swapped flag to true so we can't swap again
+			// Set the swapped flag to true so we can't swap again until the next tetromino drops
 			this.swapped = true;
 
 			// Reset the coords on the current tetromino
@@ -1034,16 +1072,14 @@ app.factory( 'tetrisGame', function()
 			if( this.swappedTetromino )
 			{
 				// Swap the current tetromino with the one in the swap variable
-				this.currentTetromino.reset();
 				var tempTetromino = this.currentTetromino;
 				this.currentTetromino = this.swappedTetromino;
-				this.swappedTetromino = this.currentTetromino;
+				this.swappedTetromino = tempTetromino;
 			}
 			else
 			{
 				// Otherwise, we can put the current tetromino into the swap space, set
 				// the next tetromino as the current, and create a new next
-				this.currentTetromino.reset();
 				this.swappedTetromino = this.currentTetromino;
 				this.currentTetromino = this.nextTetromino;
 				this.nextTetromino = this.generateTetromino();
