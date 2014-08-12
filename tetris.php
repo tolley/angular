@@ -96,6 +96,9 @@ app.factory( 'tetrisGame', function()
 		swappedTetrominoCanvas: false,
 		swappedTetrominoContext: false,
 
+		// A flag indicating if the game is over or not
+		bGameover: false,
+
 		// Returns a random number between min and max inclusive
 		rand: function( min, max )
 		{
@@ -145,6 +148,9 @@ app.factory( 'tetrisGame', function()
 			// A tetromino can only be swapped once
 			this.swapped = false;
 
+			// The variable that stores the swapped tetromino
+			this.swappedTetromino = false;
+
 			// Generate the actual board (initially populate it with zeros)
 			this.board = Array();
 			this.boardWidth = 10;
@@ -185,7 +191,10 @@ app.factory( 'tetrisGame', function()
 			this.tetrominoColors = Array(
 				'#FF0000',
 				'#00FF00',
-				'#0000FF'
+				'#38B48B',
+				'#F68D2E',
+				'#2572FF',
+				'#C1FFFF'
 			);
 
 			// The current tetromino that is falling
@@ -1184,9 +1193,17 @@ app.factory( 'tetrisGame', function()
 				this.paused = true;
 		},
 
+		// Restarts the game
+		restart: function()
+		{
+			this.initialized = false;
+			this.initialize();
+		},
+
 		gameOver: function()
 		{
 			alert( 'Game Over');
+			this.bGameover = true;
 			this.paused = true;
 		}
 	};
@@ -1247,6 +1264,11 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 			// The right arrow
 			case 39:
 				tetrisGame.onTetrominoRight();
+				break;
+
+			// The q key, restarts the game
+			case 81:
+				tetrisGame.restart();
 				break;
 		}
 	}
