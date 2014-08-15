@@ -69,7 +69,7 @@ app.directive( 'tetris', function()
 			// If the main canvas was found, initialize our game
 			if( scope.tetrisGame.canvasElem )
 			{
-				scope.tetrisGame.initialize();
+				scope.tetrisGame.initialize( scope );
 			}
 		}
 	};
@@ -111,7 +111,7 @@ app.factory( 'tetrisGame', function()
 				return;
 
 			// Set a reference to the scope
-			var scope = scope;
+			this.scope = scope;
 
 			var self = this;
 
@@ -225,7 +225,12 @@ app.factory( 'tetrisGame', function()
 			this.initialized = true;
 
 			// Set a timeout interval to update the game state
-			this.interval = setInterval( function(){ self.update.apply( self ); }, 107 );
+			this.interval = setInterval( function()
+			{
+				self.scope.$apply(
+					function(){ self.update.apply( self ); }
+				);
+			}, 107 );
 		},
 
 		// Returns a randomly generated tetrominoe
