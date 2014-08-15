@@ -95,7 +95,7 @@ app.factory( 'tetrisGame', function()
 		swappedTetrominoContext: false,
 
 		// A flag indicating if the game is over or not
-		bGameover: false,
+		bGameOver: false,
 
 		// Returns a random number between min and max inclusive
 		rand: function( min, max )
@@ -288,16 +288,9 @@ app.factory( 'tetrisGame', function()
 		// The method called to update the game
 		update: function()
 		{
-			// If the game hasn't been initialized, return
-			if( ! this.initialized )
+			// If the game hasn't been initialized, if it is paused, or if the game has ended, return
+			if( ! this.initialized || this.paused || this.bGameOver )
 				return;
-
-			// If the game is paused, render the paused message and return
-			if( this.paused )
-			{
-				this.render();
-				return;
-			}
 
 			// Get the current time and calculate the amount of time that has elapsed since our last update
 			var time = timer.getCurrentTime();
@@ -367,8 +360,9 @@ app.factory( 'tetrisGame', function()
 			// Set the current time
 			this.currentTime = time;
 
-			// Render our playing field
-			this.render();
+			// Render our playing field if the game hasn't ended
+			if( ! this.bGameOver )
+				this.render();
 		},
 
 		// Renders the playfield
@@ -381,19 +375,6 @@ app.factory( 'tetrisGame', function()
 			// Draw a rectangle on our canvas
 			this.context.fillStyle = this.bgcolor;
 			this.context.fillRect( 0, 0, this.width, this.height );
-
-			// If the game is paused, render the word paused and return
-			if( this.paused )
-			{
-				// Set up the canvas for the text
-				this.context.fillStyle = '#FFFFFF';
-				this.context.font = '38px Comic Sans';
-
-				var pausedMessage = 'Paused'
-				this.context.fillText( pausedMessage, 50, 50 )
-
-				return;
-			}
 
 			// Foreach position on the board, render a block if there is one in 
 			// that position
@@ -865,8 +846,8 @@ app.factory( 'tetrisGame', function()
 		// Called when the user wants to move the current tetromino right
 		onTetrominoRight: function()
 		{
-			// If the game hasn't been initialized, or is paused, or we have any effects, return
-			if( ! this.initialized || this.paused || this.effects.length > 0 )
+			// If the game hasn't been initialized, is paused, has ended, or we have any effects, return
+			if( ! this.initialized || this.paused || this.bGameOver || this.effects.length > 0 )
 				return;
 
 			// Clone the current tetromino
@@ -910,8 +891,8 @@ app.factory( 'tetrisGame', function()
 		// Called when the user wants to move the current tetromino right
 		onTetrominoLeft: function()
 		{
-			// If the game hasn't been initialized, or is paused, or if we have any effects
-			if( ! this.initialized || this.paused || this.effects.length > 0 )
+			// If the game hasn't been initialized, is paused, has ended, or if we have any effects
+			if( ! this.initialized || this.paused || this.bGameOver || this.effects.length > 0 )
 				return;
 
 			// Clone the current tetromino
@@ -954,8 +935,8 @@ app.factory( 'tetrisGame', function()
 		// Moves the current tetromino down one row
 		onTetrominoDown: function()
 		{
-			// If the game hasn't been initialized, or is paused, or if we have any effects
-			if( ! this.initialized || this.paused || this.effects.length > 0 )
+			// If the game hasn't been initialized, is paused, has ended, or if we have any effects
+			if( ! this.initialized || this.paused || this.bGameOver || this.effects.length > 0 )
 				return;
 
 			// Clone the current tetromino
@@ -1213,24 +1194,61 @@ app.factory( 'tetrisGame', function()
 		// Pauses or unpauses the game
 		togglePause: function()
 		{
-			if( this.paused )
+			if( this.paused && ! this.bGameOver )
 				this.paused = false;
 			else
+			{
+				// Set the paused flag to true and render the paused message
 				this.paused = true;
+				this.showStatusMessage( 'Paused' );
+			}
+		},
+
+		// Renders a message to the center of the main playing field
+		showStatusMessage: function( msg )
+		{
+			// Clear the canvas
+			this.canvasElem.width = this.canvasElem.width;
+
+			// Draw a rectangle on our canvas
+			this.context.fillStyle = this.bgcolor;
+			this.context.fillRect( 0, 0, this.width, this.height );
+
+			// Set up the canvas for the text
+			this.context.fillStyle = '#FFFFFF';
+			this.context.font = '38px Comic Sans';
+
+			// Calculate the center position for the text placement
+			var messageStats = this.context.measureText( msg );
+			var textLeft = Math.floor( this.width / 2 - messageStats.width / 2 );
+
+			this.context.fillText( msg, textLeft, 50 );
+
+			// Clear out the swap tetromino canvas and the next tetromino canvas
+			this.nextTetrominoCanvas.width = this.nextTetrominoCanvas.width;
+			this.nextTetrominoContext.fillStyle = this.bgcolor;
+			this.nextTetrominoContext.fillRect( 0, 0, this.nextTetrominoCanvas.width, this.nextTetrominoCanvas.height );
+
+			// The canvas and context that will display the swapped tetromino
+			this.swappedTetrominoCanvas.width = this.swappedTetrominoCanvas.width;
+			this.swappedTetrominoContext.fillStyle = this.bgcolor;
+			this.swappedTetrominoContext.fillRect( 0, 0, this.swappedTetrominoCanvas.width, this.swappedTetrominoCanvas.height );
 		},
 
 		// Restarts the game
 		restart: function()
 		{
 			this.initialized = false;
-			this.initialize();
+			this.initialize( this.scope );
 		},
 
+		// Displays a game over message
 		gameOver: function()
 		{
-			alert( 'Game Over');
-			this.bGameover = true;
+			this.bGameOver = true;
 			this.paused = true;
+
+			this.showStatusMessage( 'Game Over' );
 		}
 	};
 
@@ -1301,6 +1319,15 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 } ] );
 
 </script>
+
+<style>
+
+#tetrisField {
+	float: left;
+	margin: 0px 2px 0px 0px;
+}
+
+</style>
 
 </head>
 
