@@ -10,8 +10,6 @@
 <script type="text/javascript">
 "use strict";
 
-// http://www.ng-newsletter.com/posts/beginner2expert-services.html
-
 // Define our timer object (should probably fit somewhere into angular)
 var timer = ( function()
 {
@@ -106,11 +104,14 @@ app.factory( 'tetrisGame', function()
 		},
 
 		// A method to initialize this instance of the game
-		initialize: function()
+		initialize: function( scope )
 		{
 			// If the game has already been initialized, return
 			if( this.initialized )
 				return;
+
+			// Set a reference to the scope
+			var scope = scope;
 
 			var self = this;
 
@@ -282,9 +283,16 @@ app.factory( 'tetrisGame', function()
 		// The method called to update the game
 		update: function()
 		{
-			// If the game hasn't been initialized, or is paused, return
-			if( ! this.initialized || this.paused )
+			// If the game hasn't been initialized, return
+			if( ! this.initialized )
 				return;
+
+			// If the game is paused, render the paused message and return
+			if( this.paused )
+			{
+				this.render();
+				return;
+			}
 
 			// Get the current time and calculate the amount of time that has elapsed since our last update
 			var time = timer.getCurrentTime();
@@ -368,6 +376,19 @@ app.factory( 'tetrisGame', function()
 			// Draw a rectangle on our canvas
 			this.context.fillStyle = this.bgcolor;
 			this.context.fillRect( 0, 0, this.width, this.height );
+
+			// If the game is paused, render the word paused and return
+			if( this.paused )
+			{
+				// Set up the canvas for the text
+				this.context.fillStyle = '#FFFFFF';
+				this.context.font = '38px Comic Sans';
+
+				var pausedMessage = 'Paused'
+				this.context.fillText( pausedMessage, 50, 50 )
+
+				return;
+			}
 
 			// Foreach position on the board, render a block if there is one in 
 			// that position
@@ -1226,7 +1247,7 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 		// Switch based on which key was pressed
 		switch( $event.which )
 		{
-			// The space bar, paused the game
+			// The space bar, pause the game
 			case 32:
 				tetrisGame.togglePause();
 				break;
