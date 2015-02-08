@@ -3,9 +3,12 @@
 
 <head>
 
+<meta name="viewport" content="width=device-width, height=device-height, user-scalable=no">
+
 <title>Angular.js and HTML5 version of Tetris</title>
 
-<script type="text/javascript" src="/js/angular.js"></script>
+<script src="/js/hammer.js"></script>
+<script src="/js/angular.js"></script>
 
 <script type="text/javascript">
 "use strict";
@@ -26,17 +29,16 @@ var timer = ( function()
 	};
 } () );
 
-// ToDo: Learn Laravel and/or symphony php framework
-
 // Define our main app
 var app = angular.module( 'myApp', [] );
 
 // Define the directive that will allow us to display the board
-app.directive( 'tetris', function()
+app.directive( 'tetris', [ '$document', function( $document )
 {
 	return {
 		restrict: 'E',
 		replace: 'true',
+		transclude: true,
 		templateUrl: 'tetris_template.html',
 
 		link: function( scope, elem, attrs )
@@ -44,36 +46,66 @@ app.directive( 'tetris', function()
 			// Get all of the canvas elements from the main element
 			var canvi = elem.find( 'canvas' );
 
-			// Assign each of the canvas elements to the tetris game attributes
+			// Get the canvas element that will display our playing field
 			for( var n = 0; n < canvi.length; ++n )
 			{
-				switch( canvi[n].id ) 
+				if( canvi[n].className.indexOf( 'tetrisField' ) !== -1 )
 				{
-					case 'tetrisField':
-						scope.tetrisGame.canvasElem = canvi[n];
-						scope.tetrisGame.context = canvi[n].getContext( '2d' );
-						break;
-
-					case 'tetrominoPreview':
-						scope.tetrisGame.nextTetrominoCanvas = canvi[n];
-						scope.tetrisGame.nextTetrominoContext = canvi[n].getContext( '2d' );
-						break;
-
-					case 'swappedTetromino':
-						scope.tetrisGame.swappedTetrominoCanvas = canvi[n];
-						scope.tetrisGame.swappedTetrominoContext = canvi[n].getContext( '2d' );
-						break;
-				};
+					scope.tetrisGame.canvasElem = canvi[n];
+					scope.tetrisGame.context = canvi[n].getContext( '2d' );
+				}
 			}
 
 			// If the main canvas was found, initialize our game
 			if( scope.tetrisGame.canvasElem )
 			{
+				// Apply the mobile events using hammer.js to the canvas
+				var mobileHammer = new Hammer( scope.tetrisGame.canvasElem, {} );
+
+				// Enable vertical swiping
+				mobileHammer.get( 'swipe' ).set( { direction: Hammer.DIRECTION_ALL } );
+
+				// Plug into the tap event
+				mobileHammer.on( 'tap', function( event )
+				{
+					scope.tetrisGame.onTap( event );
+				} );
+
+				// Double tap to pause/unpause
+				mobileHammer.on( 'doubletap', function( event )
+				{
+					scope.tetrisGame.togglePause();
+				} );
+
+				// Swap left to move the current tetromino one column left
+				mobileHammer.on( 'swipeleft', function( event )
+				{
+					scope.tetrisGame.onTetrominoLeft();
+				} );
+
+				// Swap right to move the currenttetromino one column right
+				mobileHammer.on( 'swiperight', function( event )
+				{
+					scope.tetrisGame.onTetrominoRight();
+				} );
+
+				// Move the current tetromino to the lowest possible row
+				mobileHammer.on( 'swipeup', function( event )
+				{
+					scope.tetrisGame.dropCurrentTetromino();
+				} );
+
+				// Move the current tetromino one row down
+				mobileHammer.on( 'swipedown', function( event )
+				{
+					scope.tetrisGame.onTetrominoDown();
+				} );
+
 				scope.tetrisGame.initialize( scope );
 			}
 		}
 	};
-} );
+} ] );
 
 // Define our tetris playing app
 app.factory( 'tetrisGame', function()
@@ -85,14 +117,6 @@ app.factory( 'tetrisGame', function()
 		// The canvas element and it's context that will display our playing field
 		canvasElem: false,
 		context: false,
-
-		// The canvas and context to use to render the next tetromino that will drop
-		nextTetrominoCanvas: false,
-		nextTetrominoContext: false,
-
-		// The canvase and context that will display the swapped tetromino
-		swappedTetrominoCanvas: false,
-		swappedTetrominoContext: false,
 
 		// A flag indicating if the game is over or not
 		bGameOver: false,
@@ -115,13 +139,21 @@ app.factory( 'tetrisGame', function()
 
 			var self = this;
 
-			// Get the height and width of the canvas
-			this.width = this.canvasElem.width;
-			this.height = this.canvasElem.height;
+			// We need multiple height/width variables, one for the main playing area, and one for totals
+			this.canvasHeight = 450;
+			this.canvasWidth  = 315
+
+			this.fieldHeight = 450;
+			this.fieldWidth = 225;
+
+			// The height and width of the areas to render the swapped and next tetrominos
+			// There are two different sections, but they will have the same dimensions
+			this.sidePanelWidth = 90;
+			this.sidePanelHeight = 90;
 
 			// Calculate the width and height of a block
-			this.blockWidth = this.width / 10;
-			this.blockHeight = this.height / 20;
+			this.blockWidth = this.fieldWidth / 10;
+			this.blockHeight = this.fieldHeight / 20;
 
 			// The speed (in milliseconds) for steps between block falls
 			this.step = 700;
@@ -211,12 +243,12 @@ app.factory( 'tetrisGame', function()
 			this.bgcolor = '#000000';
 
 			// Clear our canvas
-			this.canvasElem.width = this.width;
-			this.canvasElem.height = this.height;
+			this.canvasElem.width = this.canvasWidth;
+			this.canvasElem.height = this.canvasHeight;
 
 			// Draw a rectangle on our canvas
 			this.context.fillStyle = this.bgcolor;
-			this.context.fillRect( 0, 0, this.width, this.height );
+			this.context.fillRect( 0, 0, this.fieldWidth, this.fieldHeight );
 
 			// A variable used to pause the game
 			this.paused = false;
@@ -368,13 +400,17 @@ app.factory( 'tetrisGame', function()
 		// Renders the playfield
 		render: function()
 		{
-			// Clear the canvas
-			this.canvasElem.width = this.width;
-			this.canvasElem.height = this.height;
+			// Clear the entire canvas
+			this.canvasElem.width = this.canvasElem.width;
+			this.canvasElem.height = this.canvasElem.height;
 
 			// Draw a rectangle on our canvas
 			this.context.fillStyle = this.bgcolor;
-			this.context.fillRect( 0, 0, this.width, this.height );
+			this.context.fillRect( 0, 0, this.fieldWidth, this.fieldHeight );
+
+			// Render the boarder for our tetris field
+			this.context.strokeStyle = '#FFFFFF';
+			this.context.strokeRect( 0, 0, this.canvasWidth, this.canvasHeight );
 
 			// Foreach position on the board, render a block if there is one in 
 			// that position
@@ -430,73 +466,95 @@ app.factory( 'tetrisGame', function()
 				}
 			}
 
-			// Render the next tetromino if there is a context for it
-			if( this.nextTetrominoContext )
+			// Save the current state of the drawing context on the state stack
+			this.context.save();
+
+			// Move the center of the scene into position to render the next tetromino display
+			this.context.translate( this.fieldWidth, 0 );
+
+			// Render the next tetromino display
+			this.renderNextTetromino();
+
+			// Reset the drawing context back to it's default
+			this.context.restore();
+
+			// Save the current state again on the state stack
+			this.context.save();
+
+			// Move the center of the scene into position to render the swapped tetromino display
+			this.context.translate( this.fieldWidth, this.sidePanelHeight );
+
+			// Render the swapped tetromino display
+			this.renderSwappedTetromino();
+
+			// Reset the drawing context back to it's default
+			this.context.restore();
+		},
+
+		// Renders the swapped tetromino display
+		renderSwappedTetromino: function()
+		{
+			// Render the label for this section and a border around it
+			this.context.strokeStyle = '#FFFFFF';
+			this.context.strokeRect( 0, 0, this.sidePanelWidth, this.sidePanelHeight );
+
+			// Draw a black rectangle on our canvas
+			this.context.fillStyle = this.bgcolor;
+			this.context.fillRect( 0, 0, this.sidePanelWidth, this.sidePanelHeight );
+
+			// Scale the canvas so the swapped tetromino will fit properly
+			this.context.scale( 0.7, 0.7 );
+
+			// If there is a swapped tetromino, render it
+			if( this.swappedTetromino )
 			{
-				// Clear the canvas
-				this.nextTetrominoCanvas.width = this.nextTetrominoCanvas.width;
-				this.nextTetrominoCanvas.height = this.nextTetrominoCanvas.height;
+				// Render each block on the swapped tetromino
+				this.context.fillStyle = this.swappedTetromino.color;
+				this.context.strokeStyle = this.swappedTetromino.color;
 
-				// Draw a black rectangle on our canvas
-				this.nextTetrominoContext.fillStyle = this.bgcolor;
-				this.nextTetrominoContext.fillRect( 0, 0, 
-					this.nextTetrominoCanvas.width, this.nextTetrominoCanvas.height );
-
-				// Render each block on the next tetromino
-				this.nextTetrominoContext.fillStyle = this.nextTetromino.color;
-				this.nextTetrominoContext.strokeStyle = this.nextTetromino.color;
-
-				// Scale the canvas so the next tetromino will fit properly
-				this.nextTetrominoContext.scale( 0.7, 0.7 );
-
-				for( var n = 0; n < this.nextTetromino.blocks.length; ++n )
+				for( var n = 0; n < this.swappedTetromino.blocks.length; ++n )
 				{
-					var x = this.nextTetromino.blocks[n][0];
-					var y = this.nextTetromino.blocks[n][1];
+					var x = this.swappedTetromino.blocks[n][0];
+					var y = this.swappedTetromino.blocks[n][1];
 
-					this.nextTetrominoContext.fillRect(
+					this.context.fillRect(
 						( x - 2 ) * this.blockWidth,
 						( y * -1 ) * this.blockHeight,
 						this.blockWidth - 1,
-						this.blockHeight - 1 );
+						this.blockHeight - 1
+					);
 				}
 			}
+		},
 
-			// If there is a context for rendering the swapped tetromino
-			if( this.swappedTetrominoContext )
+		// Renders the next tetromino display
+		renderNextTetromino: function()
+		{
+			// Render the label for this section and a border around it
+			this.context.strokeStyle = '#FFFFFF';
+			this.context.strokeRect( 0, 0, this.sidePanelWidth, this.sidePanelHeight );
+
+			// Draw a black rectangle on our canvas
+			this.context.fillStyle = this.bgcolor;
+			this.context.fillRect( 0, 0, this.sidePanelWidth, this.sidePanelHeight );
+
+			// Render each block on the next tetromino
+			this.context.fillStyle = this.nextTetromino.color;
+			this.context.strokeStyle = this.nextTetromino.color;
+
+			// Scale the canvas so the next tetromino will fit properly
+			this.context.scale( 0.7, 0.7 );
+
+			for( var n = 0; n < this.nextTetromino.blocks.length; ++n )
 			{
-				// Clear the canvas
-				this.swappedTetrominoCanvas.width = this.swappedTetrominoCanvas.width;
-				this.swappedTetrominoCanvas.height = this.swappedTetrominoCanvas.height;
+				var x = this.nextTetromino.blocks[n][0];
+				var y = this.nextTetromino.blocks[n][1];
 
-				// Draw a black rectangle on our canvas
-				this.swappedTetrominoContext.fillStyle = this.bgcolor;
-				this.swappedTetrominoContext.fillRect( 0, 0, 
-						this.swappedTetrominoCanvas.width, this.swappedTetrominoCanvas.height );
-
-				// Scale the canvas so the swapped tetromino will fit properly
-				this.swappedTetrominoContext.scale( 0.7, 0.7 );
-
-				// If there is a swapped tetromino, render it
-				if( this.swappedTetromino )
-				{
-					// Render each block on the swapped tetromino
-					this.swappedTetrominoContext.fillStyle = this.swappedTetromino.color;
-					this.swappedTetrominoContext.strokeStyle = this.swappedTetromino.color;
-
-					for( var n = 0; n < this.swappedTetromino.blocks.length; ++n )
-					{
-						var x = this.swappedTetromino.blocks[n][0];
-						var y = this.swappedTetromino.blocks[n][1];
-
-						this.swappedTetrominoContext.fillRect(
-							( x - 2 ) * this.blockWidth,
-							( y * -1 ) * this.blockHeight,
-							this.blockWidth - 1,
-							this.blockHeight - 1
-						);
-					}
-				}
+				this.context.fillRect(
+					( x - 2 ) * this.blockWidth,
+					( y * -1 ) * this.blockHeight,
+					this.blockWidth - 1,
+					this.blockHeight - 1 );
 			}
 		},
 
@@ -538,7 +596,7 @@ app.factory( 'tetrisGame', function()
 			if( ! bIntersecting )
 			{
 				// Render the ghost in it's lowest possible position
-				this.context.fillStyle = 'rgba( 238, 238, 238, 0.5 )';
+				this.context.fillStyle = 'rgba( 238, 238, 238, 0.3 )';
 
 				for( var n = 0; n < ghost.blocks.length; ++n )
 				{
@@ -843,6 +901,31 @@ app.factory( 'tetrisGame', function()
 			return returnValue;
 		},
 
+		// Called when the user taps or clicks on the tetris field
+		// event is the event object as passed from hammer
+		onTap: function( event )
+		{
+			// See if the tap was in the swapped tetromino display
+			// The swapped tetromino area starts at 225/90 and is 90x90
+			if( ( event.center.x >= this.fieldWidth && event.center.x <= ( this.fieldWidth + this.sidePanelWidth ) ) && 
+				( event.center.y >= this.sidePanelHeight && event.center.y <= ( this.sidePanelHeight + this.sidePanelHeight ) ) )
+			{
+				this.scope.tetrisGame.swap();
+			}
+			else
+			{
+				// Otherwise, determine whether the tap was on the left or right of the canvas
+				var canvasMiddle = parseInt( this.scope.tetrisGame.canvasWidth / 2 );
+
+				// If the tap occured on the left side, rotate the tetromino counter clockwise,
+				// otherwise, the tap was on the right half and we need to rotate clockwise
+				if( event.center.x <= canvasMiddle )
+					this.scope.tetrisGame.onTetrominoCounterClockwise();
+				else
+					this.scope.tetrisGame.onTetrominoClockwise();
+			}
+		},
+
 		// Called when the user wants to move the current tetromino right
 		onTetrominoRight: function()
 		{
@@ -1106,7 +1189,7 @@ app.factory( 'tetrisGame', function()
 		generateLineFade: function( lineNum )
 		{
 			var blockHeight = this.blockHeight;
-			var boardWidth = this.width;
+			var boardWidth = this.fieldWidth;
 			var context = this.context;
 			var board = this.board;
 
@@ -1212,27 +1295,17 @@ app.factory( 'tetrisGame', function()
 
 			// Draw a rectangle on our canvas
 			this.context.fillStyle = this.bgcolor;
-			this.context.fillRect( 0, 0, this.width, this.height );
+			this.context.fillRect( 0, 0, this.canvasWidth, this.canvasHeight );
 
 			// Set up the canvas for the text
 			this.context.fillStyle = '#FFFFFF';
-			this.context.font = '38px Comic Sans';
+			this.context.font = '30px Comic Sans';
 
 			// Calculate the center position for the text placement
 			var messageStats = this.context.measureText( msg );
-			var textLeft = Math.floor( this.width / 2 - messageStats.width / 2 );
+			var textLeft = Math.floor( this.canvasWidth / 2 - messageStats.width / 2 );
 
 			this.context.fillText( msg, textLeft, 50 );
-
-			// Clear out the swap tetromino canvas and the next tetromino canvas
-			this.nextTetrominoCanvas.width = this.nextTetrominoCanvas.width;
-			this.nextTetrominoContext.fillStyle = this.bgcolor;
-			this.nextTetrominoContext.fillRect( 0, 0, this.nextTetrominoCanvas.width, this.nextTetrominoCanvas.height );
-
-			// The canvas and context that will display the swapped tetromino
-			this.swappedTetrominoCanvas.width = this.swappedTetrominoCanvas.width;
-			this.swappedTetrominoContext.fillStyle = this.bgcolor;
-			this.swappedTetrominoContext.fillRect( 0, 0, this.swappedTetrominoCanvas.width, this.swappedTetrominoCanvas.height );
 		},
 
 		// Restarts the game
@@ -1260,6 +1333,60 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 {
 	// Add the tetris game to the scope
 	$scope.tetrisGame = tetrisGame;
+
+	// Moves the current tetromino left one
+	$scope.moveLeft = function()
+	{
+		tetrisGame.onTetrominoLeft();
+	}
+
+	// Moves the current tetromino left one
+	$scope.moveRight = function()
+	{
+		tetrisGame.onTetrominoRight();
+	}
+
+	// Pauses/Unpauses the game
+	$scope.togglePause = function()
+	{
+		tetrisGame.togglePause();
+	}
+
+	// Rotates the current tetromino counter clockwise
+	$scope.rotateCounterClockwise = function()
+	{
+		tetrisGame.onTetrominoCounterClockwise();
+	}
+
+	// Rotates the current tetromino clockwise
+	$scope.rotateClockwise = function()
+	{
+		tetrisGame.onTetrominoClockwise();
+	}
+
+	// Swaps the current tetromino 
+	$scope.swap = function()
+	{
+		tetrisGame.swap();
+	}
+
+	// Moves the current tetromino down one row
+	$scope.moveDown = function()
+	{
+		tetrisGame.onTetrominoDown();
+	}
+
+	// Drops the current tetromino
+	$scope.drop = function()
+	{
+		tetrisGame.dropCurrentTetromino();
+	}
+
+	// Restarts the current game
+	$scope.restart = function()
+	{
+		tetrisGame.restart();
+	}
 
 	// Set up the UI calls to the tetris game
 	$scope.onKeyDown = function( $event )
@@ -1321,12 +1448,32 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 </script>
 
 <style>
+	div.container div.swapped_canvas_wrapper {
+		float: left;
+		height: 400px;
+	}
 
-#tetrisField {
-	float: left;
-	margin: 0px 2px 0px 0px;
-}
+	div.container div.main_canvas_wrapper {
+		float: left;
+		height: 100%;
+	}
 
+	canvas.tetrisField {
+		float: left;
+		margin: 0px 2px 0px 5px;
+	}
+
+	div.container div.preview_canvas_wrapper {
+		float: left;
+		height: 400px;
+	}
+
+	div#controls {
+		padding-left: 10px;
+		border: solid 1px #000;
+		width: 350px;
+		float: right;
+	}
 </style>
 
 </head>
@@ -1334,6 +1481,29 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 <body ng-controller="tetrisController" ng-keydown="onKeyDown( $event )">
 
 <tetris></tetris>
+
+<br />
+<div id="controls">
+	Controls:
+	<br />
+	D: Rotate current blockcounter clockwise
+	<br />
+	R: Rotate current clockwise
+	<br />
+	Up Arrow: Drop current block
+	<br />
+	Down Arrow: Lower current block on row
+	<br />
+	Left Arrow: Move current block left
+	<br />
+	Right Arrow: Move current block right
+	<br />
+	S: Swap current block
+	<br />
+	Space bar: Toggle Pause
+	<br />
+	Q: Restart game
+</div>
 
 </body>
 
