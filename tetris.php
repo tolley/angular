@@ -71,12 +71,6 @@ app.directive( 'tetris', [ '$document', function( $document )
 					scope.tetrisGame.onTap( event );
 				} );
 
-				// Double tap to pause/unpause
-				mobileHammer.on( 'doubletap', function( event )
-				{
-					scope.tetrisGame.togglePause();
-				} );
-
 				// Swap left to move the current tetromino one column left
 				mobileHammer.on( 'swipeleft', function( event )
 				{
@@ -320,70 +314,74 @@ app.factory( 'tetrisGame', function()
 		// The method called to update the game
 		update: function()
 		{
-			// If the game hasn't been initialized, if it is paused, or if the game has ended, return
-			if( ! this.initialized || this.paused || this.bGameOver )
+			// If the game hasn't been initialized, or if it's game over, return
+			if( ! this.initialized || this.bGameOver )
 				return;
 
 			// Get the current time and calculate the amount of time that has elapsed since our last update
 			var time = timer.getCurrentTime();
 			this.elapsedTime += ( time - this.currentTime );
 
-			// If we have any effects, update them
-			if( this.effects.length > 0 )
+			// If the game is not paused, update the game state
+			if( ! this.paused )
 			{
-				for( var n = 0; n < this.effects.length; ++n )
+				// If we have any effects, update them
+				if( this.effects.length > 0 )
 				{
-					this.effects[n].update( time - this.currentTime );
-				}
-			}
-			else
-			{
-				// If the lock countdown is running
-				if( this.tetrominoLockCountdownRunning )
-				{
-					// Increment the lock countdown and see if the lock countdown has expired
-					this.tetrominoLockCounter += ( time - this.currentTime );
-
-					if( this.tetrominoLockCounter >= this.tetrominoLockTimeout )
+					for( var n = 0; n < this.effects.length; ++n )
 					{
-						this.lockCurrentTetromino();
-					}
-					else if( ! this.isTetrominoOnBoard( this.currentTetromino ) )
-					{
-						// Verify that the tetromino is on the board
-						// If the current tetromino can't find a place on the board, this means
-						// the player has lost and the game is over
-						this.gameOver();
+						this.effects[n].update( time - this.currentTime );
 					}
 				}
-				else if( this.elapsedTime >= this.step )
+				else
 				{
-					// If the elapsed time is greater than the current step value
-					// Reset the elapsedtime
-					this.elapsedTime = 0;
-
-					// If the lock countdown isn't running for the current tetromino
-					if( ! this.tetrominoLockCountdownRunning )
+					// If the lock countdown is running
+					if( this.tetrominoLockCountdownRunning )
 					{
-						// Make sure we can move the current tetromino down
-						var clone = this.currentTetromino.clone();
-						for( var n = 0; n < clone.blocks.length; ++n )
+						// Increment the lock countdown and see if the lock countdown has expired
+						this.tetrominoLockCounter += ( time - this.currentTime );
+
+						if( this.tetrominoLockCounter >= this.tetrominoLockTimeout )
 						{
-							clone.blocks[n][1] += 1;
+							this.lockCurrentTetromino();
 						}
-
-						// Move the pivot down one block
-						clone.pivot[1] += 1;
-
-						if( this.isValidTetrominoPosition( clone ) )
-							this.currentTetromino = clone;
-					
-						// Check to see if we need to start the lock countdown for the current tetromino
-						if( this.hasTetrominoLanded( this.currentTetromino ) )
+						else if( ! this.isTetrominoOnBoard( this.currentTetromino ) )
 						{
-							// Start the lock countdown
-							this.tetrominoLockCounter = 0;
-							this.tetrominoLockCountdownRunning = true;
+							// Verify that the tetromino is on the board
+							// If the current tetromino can't find a place on the board, this means
+							// the player has lost and the game is over
+							this.gameOver();
+						}
+					}
+					else if( this.elapsedTime >= this.step )
+					{
+						// If the elapsed time is greater than the current step value
+						// Reset the elapsedtime
+						this.elapsedTime = 0;
+
+						// If the lock countdown isn't running for the current tetromino
+						if( ! this.tetrominoLockCountdownRunning )
+						{
+							// Make sure we can move the current tetromino down
+							var clone = this.currentTetromino.clone();
+							for( var n = 0; n < clone.blocks.length; ++n )
+							{
+								clone.blocks[n][1] += 1;
+							}
+
+							// Move the pivot down one block
+							clone.pivot[1] += 1;
+
+							if( this.isValidTetrominoPosition( clone ) )
+								this.currentTetromino = clone;
+						
+							// Check to see if we need to start the lock countdown for the current tetromino
+							if( this.hasTetrominoLanded( this.currentTetromino ) )
+							{
+								// Start the lock countdown
+								this.tetrominoLockCounter = 0;
+								this.tetrominoLockCountdownRunning = true;
+							}
 						}
 					}
 				}
@@ -404,91 +402,106 @@ app.factory( 'tetrisGame', function()
 			this.canvasElem.width = this.canvasElem.width;
 			this.canvasElem.height = this.canvasElem.height;
 
-			// Draw a rectangle on our canvas
-			this.context.fillStyle = this.bgcolor;
-			this.context.fillRect( 0, 0, this.fieldWidth, this.fieldHeight );
-
-			// Render the boarder for our tetris field
-			this.context.strokeStyle = '#FFFFFF';
-			this.context.strokeRect( 0, 0, this.canvasWidth, this.canvasHeight );
-
-			// Foreach position on the board, render a block if there is one in 
-			// that position
-			for( var x = 0; x < this.board.length; ++x )
-			{
-				for( var y = 0; y < this.board[x].length; ++y )
-				{
-					if( typeof this.board[x][y] === 'string' )
-					{
-						this.context.fillStyle = this.board[x][y];
-						this.context.strokeStyle = this.board[x][y];
-
-						this.context.fillRect(
-							x * this.blockWidth,
-							y * this.blockHeight,
-							this.blockWidth - 1,
-							this.blockHeight - 1 );
-					}
-
-				}
-			}
-
-			// Render the ghost tetromino on the board
-			this.renderGhostTetromino();
-
-			// Render the current tetromino
-			this.context.fillStyle = this.currentTetromino.color;
-			this.context.strokeStyle = this.currentTetromino.color;
-
-			for( var n = 0; n < this.currentTetromino.blocks.length; ++n )
-			{
-				var x = this.currentTetromino.blocks[n][0];
-				var y = this.currentTetromino.blocks[n][1];
-
-				this.context.fillRect(
-					x * this.blockWidth,
-					y * this.blockHeight,
-					this.blockWidth - 1,
-					this.blockHeight - 1 );
-			}
-
-			// If we have any effects
-			if( this.effects.length > 0 )
-			{
-				for( var n = this.effects.length - 1; n >= 0;--n )
-				{
-					// Render the effect and then check to see if it is complete
-					this.effects[n].render();
-
-					// If the effect has completed, remove it from the effects array
-					if( this.effects[n].isComplete() )
-						this.effects.splice( n, 1 );
-				}
-			}
-
-			// Save the current state of the drawing context on the state stack
+			// Translate the origin of the drawing context into position and render the number of lines the player has made
 			this.context.save();
+			this.context.translate( this.fieldWidth, ( this.sidePanelHeight * 2 + ( this.sidePanelHeight / 2 ) ) );
+			this.renderNumLines();
+			this.context.restore();
 
-			// Move the center of the scene into position to render the next tetromino display
+			// Translate the origin of the drawing context into position and render the next tetromino display
+			this.context.save();
 			this.context.translate( this.fieldWidth, 0 );
-
-			// Render the next tetromino display
 			this.renderNextTetromino();
-
-			// Reset the drawing context back to it's default
 			this.context.restore();
 
-			// Save the current state again on the state stack
+			// Translate the origin of the drawing context into position and render the swapped tetromino display
 			this.context.save();
-
-			// Move the center of the scene into position to render the swapped tetromino display
 			this.context.translate( this.fieldWidth, this.sidePanelHeight );
-
-			// Render the swapped tetromino display
 			this.renderSwappedTetromino();
-
-			// Reset the drawing context back to it's default
 			this.context.restore();
+
+			// Translate the origin of the drawing context into position and render the pause button
+			this.context.save();
+			this.context.translate( this.fieldWidth, ( this.sidePanelHeight * 2 ) );
+			this.renderPauseButton();
+			this.context.restore();
+
+			// If the game is not paused
+			if( ! this.paused )
+			{
+				// Draw a rectangle on our canvas
+				this.context.fillStyle = this.bgcolor;
+				this.context.fillRect( 0, 0, this.fieldWidth, this.fieldHeight );
+
+				// Render the boarder for our tetris field
+				this.context.strokeStyle = '#FFFFFF';
+				this.context.strokeRect( 0, 0, this.canvasWidth, this.canvasHeight );
+
+				// Foreach position on the board, render a block if there is one in 
+				// that position
+				for( var x = 0; x < this.board.length; ++x )
+				{
+					for( var y = 0; y < this.board[x].length; ++y )
+					{
+						if( typeof this.board[x][y] === 'string' )
+						{
+							this.context.fillStyle = this.board[x][y];
+							this.context.strokeStyle = this.board[x][y];
+
+							this.context.fillRect(
+								x * this.blockWidth,
+								y * this.blockHeight,
+								this.blockWidth - 1,
+								this.blockHeight - 1 );
+						}
+
+					}
+				}
+
+				// Render the ghost tetromino on the board
+				this.renderGhostTetromino();
+
+				// Render the current tetromino
+				this.context.fillStyle = this.currentTetromino.color;
+				this.context.strokeStyle = this.currentTetromino.color;
+
+				for( var n = 0; n < this.currentTetromino.blocks.length; ++n )
+				{
+					var x = this.currentTetromino.blocks[n][0];
+					var y = this.currentTetromino.blocks[n][1];
+
+					this.context.fillRect(
+						x * this.blockWidth,
+						y * this.blockHeight,
+						this.blockWidth - 1,
+						this.blockHeight - 1 );
+				}
+
+				// If we have any effects
+				if( this.effects.length > 0 )
+				{
+					for( var n = this.effects.length - 1; n >= 0;--n )
+					{
+						// Render the effect and then check to see if it is complete
+						this.effects[n].render();
+
+						// If the effect has completed, remove it from the effects array
+						if( this.effects[n].isComplete() )
+							this.effects.splice( n, 1 );
+					}
+				}
+			}
+			else
+			{
+				// Draw a rectangle on our canvas
+				this.context.save();
+				this.context.fillStyle = this.bgcolor;
+				this.context.fillRect( 0, 0, this.fieldWidth, this.fieldHeight );
+				this.context.restore();
+
+				// Render the word paused to the main playing field
+				this.showStatusMessage( 'Paused' );
+			}
 		},
 
 		// Renders the swapped tetromino display
@@ -525,6 +538,36 @@ app.factory( 'tetrisGame', function()
 					);
 				}
 			}
+		},
+
+		// Renders the pause button
+		renderPauseButton: function()
+		{
+			// Set up the color of the pause button (grey background with black text)
+			this.context.fillStyle = '#EEEEEE';
+
+			// Render the pause button rectangle
+			this.context.fillRect( 0, 0, this.sidePanelWidth, 30 );
+
+			// Render the pause button rectangle outline
+			this.context.strokeStyle = '#000000';
+			this.context.strokeRect( 0, 0, this.sidePanelWidth, 30 );
+
+			// Render the word "pause" or "unpause" depending on whether or not the game is paused
+			var msg = 'pause';
+			var left = 15;
+			if( this.paused )
+			{
+				msg = 'unpause';
+				left = 3;
+			}
+
+			// Set up the canvas for the text
+			this.context.fillStyle = '#000000';
+			this.context.font = '20px Comic Sans';
+
+			// Render the actual text
+			this.context.fillText( msg, left, 20 );
 		},
 
 		// Renders the next tetromino display
@@ -619,6 +662,19 @@ app.factory( 'tetrisGame', function()
 					);
 				}
 			}
+		},
+
+		// Renders the current number of lines the player has made
+		renderNumLines: function()
+		{
+			// Set up the canvas for the text
+			this.context.fillStyle = '#000000';
+			this.context.font = '15px Comic Sans';
+
+			var msg = '# Lines: ' + this.total_num_lines;  	
+
+			// Render the actual text
+			this.context.fillText( msg, 5, 5 );
 		},
 
 		// Adds the current tetromino to the board, sets the next tetromino as the current tetromino
@@ -911,6 +967,13 @@ app.factory( 'tetrisGame', function()
 				( event.center.y >= this.sidePanelHeight && event.center.y <= ( this.sidePanelHeight + this.sidePanelHeight ) ) )
 			{
 				this.scope.tetrisGame.swap();
+			}			
+			// Otherwise, determine if the tap was on the pause/unpause button
+			else if( ( event.center.x >= this.fieldWidth && event.center.x <= ( this.fieldWidth + this.sidePanelWidth ) ) && 
+					( event.center.y >= ( this.sidePanelHeight + this.sidePanelHeight ) && 
+						event.center.y <= ( this.sidePanelHeight + this.sidePanelHeight + 30 ) ) )
+			{
+				this.togglePause();
 			}
 			else
 			{
@@ -1278,7 +1341,9 @@ app.factory( 'tetrisGame', function()
 		togglePause: function()
 		{
 			if( this.paused && ! this.bGameOver )
+			{
 				this.paused = false;
+			}
 			else
 			{
 				// Set the paused flag to true and render the paused message
@@ -1290,12 +1355,12 @@ app.factory( 'tetrisGame', function()
 		// Renders a message to the center of the main playing field
 		showStatusMessage: function( msg )
 		{
-			// Clear the canvas
-			this.canvasElem.width = this.canvasElem.width;
+			// Save the current state of the drawing context
+			this.context.save();
 
-			// Draw a rectangle on our canvas
+			// Draw a rectangle on our tetris field
 			this.context.fillStyle = this.bgcolor;
-			this.context.fillRect( 0, 0, this.canvasWidth, this.canvasHeight );
+			this.context.fillRect( 0, 0, this.fieldWidth, this.fieldHeight );
 
 			// Set up the canvas for the text
 			this.context.fillStyle = '#FFFFFF';
@@ -1303,9 +1368,12 @@ app.factory( 'tetrisGame', function()
 
 			// Calculate the center position for the text placement
 			var messageStats = this.context.measureText( msg );
-			var textLeft = Math.floor( this.canvasWidth / 2 - messageStats.width / 2 );
+			var textLeft = Math.floor( this.fieldWidth / 2 - messageStats.width / 2 );
 
 			this.context.fillText( msg, textLeft, 50 );
+
+			// Reset the state of the drawing context
+			this.context.restore();
 		},
 
 		// Restarts the game
@@ -1468,12 +1536,22 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 		height: 400px;
 	}
 
-	div#controls {
+	div#controls
+	{
 		padding-left: 10px;
 		border: solid 1px #000;
 		width: 350px;
 		float: right;
 	}
+
+	@media (max-width: 480px)
+	{
+		.mobile_only{ display: none; }
+	}
+
+	@media (min-width: 481px) {
+		.mobile_only{ display: block; }
+	} 
 </style>
 
 </head>
@@ -1483,7 +1561,7 @@ app.controller( 'tetrisController', [ '$scope', 'tetrisGame', function( $scope, 
 <tetris></tetris>
 
 <br />
-<div id="controls">
+<div id="controls" class="mobile_only">
 	Controls:
 	<br />
 	D: Rotate current blockcounter clockwise
