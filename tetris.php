@@ -43,59 +43,65 @@ app.directive( 'tetris', [ '$document', function( $document )
 
 		link: function( scope, elem, attrs )
 		{
-			// Get all of the canvas elements from the main element
-			var canvi = elem.find( 'canvas' );
+			// Get the canvas element
+			var canvas = elem.find( 'canvas' )[0];
 
-			// Get the canvas element that will display our playing field
-			for( var n = 0; n < canvi.length; ++n )
-			{
-				if( canvi[n].className.indexOf( 'tetrisField' ) !== -1 )
-				{
-					scope.tetrisGame.canvasElem = canvi[n];
-					scope.tetrisGame.context = canvi[n].getContext( '2d' );
-				}
-			}
+			scope.tetrisGame.canvasElem = canvas;
+			scope.tetrisGame.context = canvas.getContext( '2d' );
 
 			// If the main canvas was found, initialize our game
 			if( scope.tetrisGame.canvasElem )
 			{
+				scope.tetrisGame.initialize( scope );
+
 				// Apply the mobile events using hammer.js to the canvas
 				var mobileHammer = new Hammer( scope.tetrisGame.canvasElem, {} );
 
 				// Enable vertical swiping
-				mobileHammer.get( 'swipe' ).set( { direction: Hammer.DIRECTION_ALL } );
+				mobileHammer.get( 'swipe' ).set( { direction: Hammer.DIRECTION_VERTICAL } );
 
 				// Plug into the tap event
 				mobileHammer.on( 'tap', function( event )
 				{
+					event.preventDefault();
 					scope.tetrisGame.onTap( event );
 				} );
 
-				// Swap left to move the current tetromino one column left
-				mobileHammer.on( 'swipeleft', function( event )
+				// Plug into the pan event, move the current tetromino left or right depending on the
+				// distance and direction of the pan
+				mobileHammer.on( 'pan', function( event )
 				{
-					scope.tetrisGame.onTetrominoLeft();
+					event.preventDefault();
+					scope.tetrisGame.onPan( event );
 				} );
 
-				// Swap right to move the currenttetromino one column right
-				mobileHammer.on( 'swiperight', function( event )
+				// Plug into the pan start event, to start tracking the finger movement X delta
+				mobileHammer.on( 'panstart', function( event )
 				{
-					scope.tetrisGame.onTetrominoRight();
+					event.preventDefault();
+					scope.tetrisGame.onPanStart();
+				} );
+
+				// Plug into the pan end event, to stop tracking the finger movement X delta
+				mobileHammer.on( 'panend', function( event )
+				{
+					event.preventDefault();
+					scope.tetrisGame.onPanEnd();
 				} );
 
 				// Move the current tetromino to the lowest possible row
 				mobileHammer.on( 'swipeup', function( event )
 				{
+					event.preventDefault();
 					scope.tetrisGame.dropCurrentTetromino();
 				} );
 
 				// Move the current tetromino one row down
 				mobileHammer.on( 'swipedown', function( event )
 				{
+					event.preventDefault();
 					scope.tetrisGame.onTetrominoDown();
 				} );
-
-				scope.tetrisGame.initialize( scope );
 			}
 		}
 	};
@@ -182,6 +188,20 @@ app.factory( 'tetrisGame', function()
 			this.board = Array();
 			this.boardWidth = 10;
 			this.boardHeight = 20;
+
+			// The absolute value of the distance the user must pan before we move the current tetromino
+			this.panThreshold = 30;
+
+			// Stores the direction of the current pan
+			this.currentPanDirection = false;
+
+			// Keeps track of the current pan distance
+			this.currentPanDistance = 0;
+
+			// A variable to use to keep track of the previous distance when onPan is called cause
+			// hammer's event.distance keeps the total distance since the start of the pan, but we 
+			// need the distance panned since the last time onPan was called.
+			this.previousDistance = 0;
 
 			for( var x = 0; x < this.boardWidth; ++x )
 			{
@@ -986,6 +1006,92 @@ app.factory( 'tetrisGame', function()
 					this.scope.tetrisGame.onTetrominoCounterClockwise();
 				else
 					this.scope.tetrisGame.onTetrominoClockwise();
+			}
+		},
+
+		// Called when the user starts a pan
+		onPanStart: function()
+		{
+			// Reset the current pan direction and distance
+			this.currentPanDirection = false;
+			this.currentPanDistance = 0;
+			this.previousDistance = 0;
+		},
+
+		// Called when the user ends the pan
+		onPanEnd: function()
+		{
+			// Reset the current pan direction and distance
+			this.currentPanDirection = false;
+			this.currentPanDistance = 0;
+			this.previousDistance = 0;
+		},
+
+		// Called when the user pans (each time the user moves their finger)
+		onPan: function( event )
+		{
+			// If we have a pan that is not horizontal, return
+			if( Math.abs( event.deltaY ) > Math.abs( event.deltaX ) )
+			{
+				return;
+			}
+
+			if( event.direction != Hammer.DIRECTION_RIGHT && event.direction != Hammer.DIRECTION_LEFT )
+			{
+				return;
+			}
+
+			// Calculate the distance the pan has moved since the last onPan event
+			var currentPanDistance = 0;
+
+			// We have to figure out which one is greater cause the user can switch directions mid pan
+			// and the distance will start reducing instead of increasing
+			if( event.distance > this.previousDistance )
+			{
+				currentPanDistance = Math.floor( event.distance ) - this.previousDistance;
+			}
+			else
+			{
+				currentPanDistance = this.previousDistance - Math.floor( event.distance );
+			}
+
+			// Set the current distance to the previous distance
+			this.previousDistance = Math.floor( event.distance );
+
+			// If the current pan direction hasn't been set, or if it's been changed, update our variables
+			if( ! this.currentPanDirection || event.direction != this.currentPanDirection )
+			{
+				this.currentPanDirection = event.direction;
+				this.currentPanDistance = currentPanDistance;
+			}
+			else
+			{
+				// Otherwise, add the pan distance to our counter
+				this.currentPanDistance += currentPanDistance;
+			}
+
+			// If the user has panned far enough to move the current tetromino
+			if( this.currentPanDistance >= this.panThreshold )
+			{
+				// Determine how many columns we need to move the current tetromino
+				var numColumns = Math.floor( this.currentPanDistance / this.panThreshold );
+
+				// Move the current tetromino based on the direction
+				for( var n = 0; n < numColumns; ++n )
+				{
+					if( this.currentPanDirection == Hammer.DIRECTION_RIGHT )
+					{
+						this.onTetrominoRight();
+					}
+					else if( this.currentPanDirection == Hammer.DIRECTION_LEFT )
+					{
+						this.onTetrominoLeft();
+					}
+
+					// Reduce the current pan distance so it does not accumulate (if it does, the tetromino
+					// will jump across the field)
+					this.currentPanDistance -= this.panThreshold;
+				}
 			}
 		},
 
