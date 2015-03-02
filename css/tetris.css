@@ -1,0 +1,36 @@
+div.container div.swapped_canvas_wrapper {
+	float: left;
+	height: 400px;
+}
+
+div.container div.main_canvas_wrapper {
+	float: left;
+	height: 100%;
+}
+
+canvas.tetrisField {
+	float: left;
+	margin: 0px 2px 0px 5px;
+}
+
+div.container div.preview_canvas_wrapper {
+	float: left;
+	height: 400px;
+}
+
+div#controls
+{
+	padding-left: 10px;
+	border: solid 1px #000;
+	width: 350px;
+	float: right;
+}
+
+@media (max-width: 480px)
+{
+	.mobile_only{ display: none; }
+}
+
+@media (min-width: 481px) {
+	.mobile_only{ display: block; }
+}
